@@ -1,6 +1,14 @@
-import { X, Play, Pause, Volume2, VolumeX, Maximize, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Play, Pause, Volume2, VolumeX, Maximize, Settings, ChevronLeft, ChevronRight, Cast } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Hls from 'hls.js';
+
+declare global {
+  interface Window {
+    chrome: any;
+    cast: any;
+    __onGCastApiAvailable: any;
+  }
+}
 
 interface Stream {
   id: string;
@@ -30,10 +38,32 @@ interface VideoPlayerProps {
 export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
+  const [isCastAvailable, setIsCastAvailable] = useState(false);
   const [volume, setVolume] = useState(75);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+
+  useEffect(() => {
+    const checkCast = () => {
+      if (window.cast && window.cast.framework) {
+        setIsCastAvailable(true);
+        const context = window.cast.framework.CastContext.getInstance();
+        context.setOptions({
+          receiverApplicationId: window.chrome.cast.media.DEFAULT_RECEIVER_APP_ID,
+          autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+        });
+      }
+    };
+
+    if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+      checkCast();
+    } else {
+      window.__onGCastApiAvailable = (isAvailable: boolean) => {
+        if (isAvailable) checkCast();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     setError(null);
@@ -95,6 +125,24 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
     if (videoRef.current) {
       videoRef.current.volume = newVolume / 100;
     }
+  };
+
+  const handleCast = () => {
+    const context = window.cast.framework.CastContext.getInstance();
+    context.requestSession().then(() => {
+      const session = context.getCurrentSession();
+      if (session) {
+        const mediaInfo = new window.chrome.cast.media.MediaInfo(stream.url, 'application/x-mpegurl');
+        mediaInfo.metadata = new window.chrome.cast.media.GenericMediaMetadata();
+        mediaInfo.metadata.title = stream.title;
+        mediaInfo.metadata.images = [{ url: stream.logo }];
+        
+        const request = new window.chrome.cast.media.LoadRequest(mediaInfo);
+        session.loadMedia(request);
+      }
+    }).catch((err: any) => {
+      console.error('Cast error:', err);
+    });
   };
 
   return (
@@ -187,6 +235,16 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
               </div>
 
               <div className="flex items-center gap-2">
+                {isCastAvailable && (
+                  <button 
+                    onClick={handleCast}
+                    className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    title="Cast to TV"
+                  >
+                    <Cast className="w-5 h-5 text-white" />
+                  </button>
+                )}
+
                 <button className="p-2 hover:bg-white/20 rounded-lg transition-colors">
                   <Settings className="w-5 h-5 text-white" />
                 </button>
