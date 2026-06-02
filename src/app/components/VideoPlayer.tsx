@@ -234,46 +234,46 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
           )}
 
           <div 
-            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 md:p-6 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar">
               <button
                 onClick={onPrevious}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors shrink-0"
                 title="Previous"
               >
-                <ChevronLeft className="w-6 h-6 text-white" />
+                <ChevronLeft className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </button>
 
               <button
                 onClick={togglePlay}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors shrink-0"
               >
                 {isPlaying ? (
-                  <Pause className="w-5 h-5 text-white" />
+                  <Pause className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 ) : (
-                  <Play className="w-5 h-5 text-white fill-current" />
+                  <Play className="w-4 h-4 md:w-5 md:h-5 text-white fill-current" />
                 )}
               </button>
 
               <button
                 onClick={onNext}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors shrink-0"
                 title="Next"
               >
-                <ChevronRight className="w-6 h-6 text-white" />
+                <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </button>
 
-              <div className="flex items-center gap-2 flex-1">
+              <div className="flex items-center gap-2 flex-1 min-w-[100px]">
                 <button
                   onClick={toggleMute}
-                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors shrink-0"
                 >
                   {isMuted ? (
-                    <VolumeX className="w-5 h-5 text-white" />
+                    <VolumeX className="w-4 h-4 md:w-5 md:h-5 text-white" />
                   ) : (
-                    <Volume2 className="w-5 h-5 text-white" />
+                    <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-white" />
                   )}
                 </button>
 
@@ -283,30 +283,31 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
                   max="100"
                   value={volume}
                   onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                  className="w-24 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer"
+                  className="w-full max-w-[80px] md:max-w-[120px] h-1 bg-white/30 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                {isCastAvailable && (
+              <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                {/* Cast Icon - Show if window.chrome exists, standard for many browsers */}
+                {(isCastAvailable || (window.chrome && window.chrome.cast)) && (
                   <button 
                     onClick={handleCast}
                     className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                     title="Cast to TV"
                   >
-                    <Cast className="w-5 h-5 text-white" />
+                    <Cast className="w-4 h-4 md:w-5 md:h-5 text-white" />
                   </button>
                 )}
 
                 <button className="p-2 hover:bg-white/20 rounded-lg transition-colors">
-                  <Settings className="w-5 h-5 text-white" />
+                  <Settings className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </button>
 
                 <button 
                   className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                   onClick={() => videoRef.current?.requestFullscreen()}
                 >
-                  <Maximize className="w-5 h-5 text-white" />
+                  <Maximize className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </button>
               </div>
             </div>
