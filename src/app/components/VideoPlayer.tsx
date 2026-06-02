@@ -78,21 +78,49 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
     const streamUrl = stream.url;
     const isHls = /\.m3u8(\?|$)/i.test(streamUrl);
 
+    const playVideo = () => {
+      const promise = video.play();
+      if (promise !== undefined) {
+        promise.catch(error => {
+          console.log("Autoplay prevented:", error);
+          setIsPlaying(false);
+        });
+      }
+    };
+
     if (isHls && Hls.isSupported()) {
-      const hls = new Hls();
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+      });
       hlsRef.current = hls;
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        playVideo();
+      });
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
-          setError('Playback failed. Stream may be unavailable or geo-blocked.');
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              setError('Network error. The stream might be offline or geo-blocked.');
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              setError('Playback failed. This stream may not be compatible with your device.');
+              break;
+          }
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (Safari)
       video.src = streamUrl;
+      video.addEventListener('loadedmetadata', playVideo);
+      return () => video.removeEventListener('loadedmetadata', playVideo);
     } else {
       video.src = streamUrl;
+      playVideo();
     }
 
     return () => {
@@ -165,25 +193,43 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
           </button>
         </div>
 
-        <div className="relative aspect-video bg-black rounded-lg overflow-hidden group">
+        <div 
+          className="relative aspect-video bg-black rounded-lg overflow-hidden group cursor-pointer"
+          onClick={togglePlay}
+        >
           {error ? (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white p-4 text-center">
               <div>
                 <p className="text-lg mb-2">Oops!</p>
-                <p className="text-white/70">{error}</p>
+                <p className="text-white/70 mb-4">{error}</p>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.reload();
+                  }}
+                  className="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:bg-primary/90 transition-colors"
+                >
+                  Retry Connection
+                </button>
               </div>
             </div>
           ) : (
             <video
               ref={videoRef}
               autoPlay
+              playsInline
+              muted={isMuted}
+              crossOrigin="anonymous"
               className="w-full h-full"
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
             />
           )}
 
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div 
+            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-4">
               <button
                 onClick={onPrevious}
