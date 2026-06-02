@@ -45,22 +45,29 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
   const hlsRef = useRef<Hls | null>(null);
 
   useEffect(() => {
-    const checkCast = () => {
+    const initializeCast = () => {
       if (window.cast && window.cast.framework) {
-        setIsCastAvailable(true);
         const context = window.cast.framework.CastContext.getInstance();
-        context.setOptions({
-          receiverApplicationId: window.chrome.cast.media.DEFAULT_RECEIVER_APP_ID,
-          autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
-        });
+        try {
+          context.setOptions({
+            receiverApplicationId: window.chrome.cast.media.DEFAULT_RECEIVER_APP_ID,
+            autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+          });
+          setIsCastAvailable(true);
+        } catch (e) {
+          console.error('Error setting cast options:', e);
+        }
       }
     };
 
     if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
-      checkCast();
+      initializeCast();
     } else {
+      // The Cast SDK will call this global function when it's ready
       window.__onGCastApiAvailable = (isAvailable: boolean) => {
-        if (isAvailable) checkCast();
+        if (isAvailable) {
+          initializeCast();
+        }
       };
     }
   }, []);
