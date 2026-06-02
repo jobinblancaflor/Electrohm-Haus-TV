@@ -202,10 +202,11 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
 
         <div 
           className="relative aspect-video bg-black rounded-lg overflow-hidden group cursor-pointer"
+          style={{ isolation: 'isolate' }}
           onClick={togglePlay}
         >
           {error ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white p-4 text-center">
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-900 text-white p-4 text-center">
               <div>
                 <p className="text-lg mb-2">Oops!</p>
                 <p className="text-white/70 mb-4">{error}</p>
@@ -225,16 +226,24 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
               ref={videoRef}
               autoPlay
               playsInline
+              webkit-playsinline="true"
               muted={isMuted}
               crossOrigin="anonymous"
-              className="w-full h-full"
+              className="w-full h-full relative z-0"
+              style={{ WebkitOverflowScrolling: 'touch' }}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
             />
           )}
 
           <div 
-            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 md:p-6 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 md:p-6 transition-opacity z-20"
+            style={{ 
+              opacity: 1, 
+              transform: 'translateZ(0)',
+              WebkitBackfaceVisibility: 'hidden',
+              WebkitTransform: 'translateZ(0)'
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar">
