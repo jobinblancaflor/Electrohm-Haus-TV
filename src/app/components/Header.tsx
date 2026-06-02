@@ -24,25 +24,25 @@ export function Header({
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center justify-between h-14 md:h-16 gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={() => window.location.reload()}>
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white text-lg font-bold">▶</span>
+            <div className="w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <span className="text-white text-base md:text-lg font-bold">▶</span>
             </div>
-            <h1 className="text-lg md:text-xl font-bold text-foreground hidden sm:block">Electrohm Haus TV</h1>
+            <h1 className="text-base md:text-xl font-bold text-foreground hidden xs:block">Electrohm Haus TV</h1>
           </div>
 
           {/* Search */}
           <div className="flex-1 max-w-md">
-            <div className="flex items-center gap-2 bg-muted/50 rounded-full px-4 py-2 border border-border focus-within:border-primary transition-colors">
-              <Search className="w-4 h-4 text-muted-foreground" />
+            <div className="flex items-center gap-2 bg-muted/50 rounded-full px-3 py-1.5 md:px-4 md:py-2 border border-border focus-within:border-primary transition-colors">
+              <Search className="w-3.5 h-3.5 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground"
+                className="bg-transparent border-none outline-none text-xs md:text-sm w-full text-foreground placeholder:text-muted-foreground"
               />
             </div>
           </div>
@@ -80,11 +80,11 @@ export function Header({
         </div>
 
         {/* Mobile Filters Row */}
-        <div className="lg:hidden flex items-center gap-2 pb-3 overflow-x-auto no-scrollbar">
+        <div className="lg:hidden flex items-center gap-2 pb-2 md:pb-3 overflow-x-auto no-scrollbar">
           <select
             value={selectedCountry}
             onChange={(e) => onCountryChange(e.target.value)}
-            className="bg-muted text-[12px] text-foreground px-3 py-1.5 rounded-full border border-border outline-none whitespace-nowrap min-w-fit"
+            className="bg-muted text-[11px] md:text-[12px] text-foreground px-3 py-1 rounded-full border border-border outline-none whitespace-nowrap min-w-fit"
           >
             <option value="All">Countries</option>
             {countries.filter(c => c !== 'All').map(country => (
@@ -95,7 +95,7 @@ export function Header({
           <select
             value={selectedCategoryId}
             onChange={(e) => onCategoryChange(e.target.value)}
-            className="bg-muted text-[12px] text-foreground px-3 py-1.5 rounded-full border border-border outline-none whitespace-nowrap min-w-fit"
+            className="bg-muted text-[11px] md:text-[12px] text-foreground px-3 py-1 rounded-full border border-border outline-none whitespace-nowrap min-w-fit"
           >
             <option value="All">Categories</option>
             {categories.map(category => (

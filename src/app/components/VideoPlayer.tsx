@@ -181,8 +181,8 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl">
+    <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm overflow-y-auto p-4 md:p-8">
+      <div className="w-full max-w-6xl mx-auto min-h-full flex flex-col justify-center py-8">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded">
