@@ -44,6 +44,31 @@ export default function App() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('All');
   const [viewAllCategory, setViewAllCategory] = useState<Category | null>(null);
   const [isViewingAllLive, setIsViewingAllLive] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    setDeferredPrompt(null);
+    setShowInstallBanner(false);
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -361,6 +386,31 @@ export default function App() {
           onNext={handleNext}
           onPrevious={handlePrevious}
         />
+      )}
+
+      {showInstallBanner && (
+        <div className="fixed bottom-24 left-4 right-4 z-[60] md:left-auto md:right-8 md:bottom-8 md:w-80">
+          <div className="bg-primary text-primary-foreground p-4 rounded-xl shadow-2xl border border-white/10 flex items-center justify-between gap-4">
+            <div>
+              <p className="font-semibold text-sm">Install Electrohm Haus TV</p>
+              <p className="text-xs opacity-90">Access your favorite streams faster on your device.</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button 
+                onClick={() => setShowInstallBanner(false)}
+                className="p-1 hover:bg-black/10 rounded-lg text-xs"
+              >
+                Later
+              </button>
+              <button 
+                onClick={handleInstallClick}
+                className="bg-white text-primary px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-100"
+              >
+                Install
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
