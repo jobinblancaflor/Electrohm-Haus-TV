@@ -7,6 +7,7 @@ declare global {
     chrome: any;
     cast: any;
     __onGCastApiAvailable: any;
+    isCastApiAvailable: boolean;
   }
 }
 
@@ -39,6 +40,7 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isCastAvailable, setIsCastAvailable] = useState(false);
+  const [isCasting, setIsCasting] = useState(false);
   const [volume, setVolume] = useState(75);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -50,20 +52,28 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
         const context = window.cast.framework.CastContext.getInstance();
         try {
           context.setOptions({
-            receiverApplicationId: window.chrome.cast.media.DEFAULT_RECEIVER_APP_ID,
-            autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+            receiverApplicationId: 'CC1AD845', // Default Media Receiver
+            autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+            androidReceiverCompatible: true
           });
-          setIsCastAvailable(true);
+
+          // Update availability based on cast state
+          const updateCastState = () => {
+            const state = context.getCastState();
+            setIsCastAvailable(state !== window.cast.framework.CastState.NO_DEVICES_AVAILABLE);
+          };
+
+          context.addEventListener(window.cast.framework.CastContextEventType.CAST_STATE_CHANGED, updateCastState);
+          updateCastState();
         } catch (e) {
           console.error('Error setting cast options:', e);
         }
       }
     };
 
-    if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+    if (window.isCastApiAvailable || (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable)) {
       initializeCast();
     } else {
-      // The Cast SDK will call this global function when it's ready
       window.__onGCastApiAvailable = (isAvailable: boolean) => {
         if (isAvailable) {
           initializeCast();
@@ -163,20 +173,29 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
   };
 
   const handleCast = () => {
+    if (!window.cast || !window.cast.framework) return;
+
+    setIsCasting(true);
     const context = window.cast.framework.CastContext.getInstance();
+    
     context.requestSession().then(() => {
+      setIsCasting(false);
       const session = context.getCurrentSession();
       if (session) {
         const mediaInfo = new window.chrome.cast.media.MediaInfo(stream.url, 'application/x-mpegurl');
         mediaInfo.metadata = new window.chrome.cast.media.GenericMediaMetadata();
         mediaInfo.metadata.title = stream.title;
+        mediaInfo.metadata.subtitle = stream.channel_categories || 'Live Stream';
         mediaInfo.metadata.images = [{ url: stream.logo }];
         
-        const request = new window.chrome.cast.media.LoadRequest(mediaInfo);
-        session.loadMedia(request);
+        const loadRequest = new window.chrome.cast.media.LoadRequest(mediaInfo);
+        session.loadMedia(loadRequest);
       }
     }).catch((err: any) => {
-      console.error('Cast error:', err);
+      setIsCasting(false);
+      if (err !== 'cancel' && err !== 'error') {
+        console.error('Cast error:', err);
+      }
     });
   };
 
@@ -297,14 +316,15 @@ export function VideoPlayer({ stream, onClose, onNext, onPrevious }: VideoPlayer
               </div>
 
               <div className="flex items-center gap-1 md:gap-2 shrink-0">
-                {/* Cast Icon - Show if window.chrome exists, standard for many browsers */}
+                {/* Cast Icon */}
                 {(isCastAvailable || (window.chrome && window.chrome.cast)) && (
                   <button 
                     onClick={handleCast}
-                    className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    className={`p-2 hover:bg-white/20 rounded-lg transition-colors ${isCasting ? 'animate-pulse text-primary' : 'text-white'}`}
                     title="Cast to TV"
+                    disabled={isCasting}
                   >
-                    <Cast className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                    <Cast className="w-4 h-4 md:w-5 md:h-5" />
                   </button>
                 )}
 

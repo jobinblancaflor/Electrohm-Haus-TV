@@ -333,7 +333,7 @@ export default function App() {
                 ))}
               </>
             )}
-          </>
+          </div>
         )}
 
         <footer className="border-t border-border mt-16 py-8">
