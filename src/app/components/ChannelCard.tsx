@@ -44,9 +44,9 @@ export function ChannelCard({ name, category, thumbnail, isLive, viewers, onClic
         </div>
       </div>
 
-      <div className="p-4">
-        <h3 className="text-foreground mb-1">{name}</h3>
-        <p className="text-sm text-muted-foreground">{category}</p>
+      <div className="p-3 md:p-4">
+        <h3 className="text-sm md:text-base font-semibold text-foreground mb-0.5 line-clamp-1">{name}</h3>
+        <p className="text-[10px] md:text-sm text-muted-foreground line-clamp-1">{category}</p>
       </div>
     </div>
   );

@@ -257,13 +257,13 @@ export default function App() {
         onCategoryChange={setSelectedCategoryId}
       />
 
-      <main className="pt-[60px]">
+      <main className="pt-[110px] lg:pt-[70px]">
         {isLoading ? (
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
         ) : (
-          <>
+          <div className="max-w-[1600px] mx-auto">
             {!viewAllCategory && !isViewingAllLive && <HeroSection onWatchNow={handleHeroWatchNow} />}
 
             {(viewAllCategory || isViewingAllLive) && (
@@ -273,14 +273,14 @@ export default function App() {
                     setViewAllCategory(null);
                     setIsViewingAllLive(false);
                   }}
-                  className="mb-4 flex items-center gap-2 text-primary hover:underline"
+                  className="mb-6 flex items-center gap-2 text-primary hover:underline font-medium"
                 >
                   &larr; Back to Home
                 </button>
-                <h2 className="text-3xl font-bold mb-8">
+                <h2 className="text-2xl md:text-3xl font-bold mb-8">
                   {isViewingAllLive ? 'Live Now' : viewAllCategory?.name}
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
                   {filteredStreams.map((stream) => (
                     <ChannelCard
                       key={stream.id}
@@ -293,7 +293,7 @@ export default function App() {
                   ))}
                 </div>
                 {filteredStreams.length === 0 && (
-                  <p className="text-muted-foreground text-center py-12">No channels found.</p>
+                  <p className="text-muted-foreground text-center py-20">No channels found matching your filters.</p>
                 )}
               </div>
             )}
