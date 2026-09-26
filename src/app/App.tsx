@@ -1,417 +1,418 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Header } from './components/Header';
-import { HeroSection } from './components/HeroSection';
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { RotateCw } from 'lucide-react';
+import type { Catalog, Stream } from './types';
+import { loadCatalog } from './lib/catalog';
+import { countryInSentence, countryName } from './lib/format';
+import { readIds, readString, writeIds, writeString } from './lib/storage';
+import {
+  FAVORITES,
+  Header,
+  type CategoryOption,
+  type CountryOption,
+  type LanguageOption,
+} from './components/Header';
+import { Tuner } from './components/Tuner';
 import { CategorySection } from './components/CategorySection';
-import { ChannelCard } from './components/ChannelCard';
-import { VideoPlayer } from './components/VideoPlayer';
+import { ChannelGrid } from './components/ChannelGrid';
+import { ChannelEntry } from './components/ChannelEntry';
+import { InstallPrompt } from './components/InstallPrompt';
+import { Footer } from './components/Footer';
 
-interface Category {
-  id: string;
-  name: string;
-  description: string;
+// hls.js is most of the bundle, so the player loads on first play.
+const VideoPlayer = lazy(() => import('./components/VideoPlayer').then((m) => ({ default: m.VideoPlayer })));
+
+const RAIL_SIZE = 16;
+const HOME_CATEGORIES = 6;
+const RECENT_KEY = 'electrohm:recent';
+const RECENT_LIMIT = 16;
+const FAVORITES_KEY = 'electrohm:favorites';
+const LAST_KEY = 'electrohm:last';
+/** Query parameter for shareable channel links: ?watch=<channel id>. */
+const WATCH_PARAM = 'watch';
+
+type LoadState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; catalog: Catalog };
+
+/** Channels with a logo first, so rails don't open on a wall of monograms. */
+function logosFirst(streams: Stream[]) {
+  return [...streams].sort((a, b) => Number(!a.logo) - Number(!b.logo));
 }
 
-interface Stream {
-  id: string;
-  channel: string | null;
-  feed: string | null;
-  title: string;
-  url: string;
-  quality: string | null;
-  label: string | null;
-  user_agent: string | null;
-  referrer: string | null;
-  logo: string;
-  channel_country: string | null;
-  channel_category_ids: string[];
-  channel_categories: string | null;
-  channel_name: string | null;
-  channel_is_nsfw: boolean;
+function watchUrl(id: string) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set(WATCH_PARAM, id);
+  return url.toString();
 }
-
-const STREAMS_API_URL = 'https://iptv-org.github.io/api/streams.json';
-const CHANNELS_API_URL = 'https://iptv-org.github.io/api/channels.json';
-const CATEGORIES_API_URL = 'https://iptv-org.github.io/api/categories.json';
-const LOGOS_API_URL = 'https://iptv-org.github.io/api/logos.json';
 
 export default function App() {
-  const [selectedStream, setSelectedStream] = useState<Stream | null>(null);
-  const [streams, setStreams] = useState<Stream[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [load, setLoad] = useState<LoadState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState<string>('All');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('All');
-  const [viewAllCategory, setViewAllCategory] = useState<Category | null>(null);
-  const [isViewingAllLive, setIsViewingAllLive] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [country, setCountry] = useState('All');
+  const [language, setLanguage] = useState('All');
+  const [categoryId, setCategoryId] = useState('all');
+  const [browsingAll, setBrowsingAll] = useState(false);
+  const [playing, setPlaying] = useState<{ stream: Stream; queue: Stream[] } | null>(null);
+  const [recentIds, setRecentIds] = useState<string[]>(() => readIds(RECENT_KEY));
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => readIds(FAVORITES_KEY));
+  const [lastId] = useState(() => readString(LAST_KEY));
+  const deepLinkHandled = useRef(false);
+
+  const query = useDeferredValue(searchQuery.trim().toLowerCase());
 
   useEffect(() => {
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallBanner(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response to the install prompt: ${outcome}`);
-    setDeferredPrompt(null);
-    setShowInstallBanner(false);
-  };
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [streamsResponse, channelsResponse, categoriesResponse, logosResponse] = await Promise.all([
-          fetch(STREAMS_API_URL),
-          fetch(CHANNELS_API_URL),
-          fetch(CATEGORIES_API_URL),
-          fetch(LOGOS_API_URL),
-        ]);
-
-        const [streamsData, channelsData, categoriesData, logosData] = await Promise.all([
-          streamsResponse.json(),
-          channelsResponse.json(),
-          categoriesResponse.json(),
-          logosResponse.json(),
-        ]);
-
-        const channelsById = new Map(
-          channelsData
-            .filter((channel: any) => channel && channel.id)
-            .map((channel: any) => [channel.id, channel])
-        );
-        const categoriesById = new Map(
-          categoriesData
-            .filter((category: any) => category && category.id)
-            .map((category: any) => [category.id, category])
-        );
-        const logosByChannel = new Map();
-        const logosByChannelFeed = new Map();
-        for (const logo of logosData) {
-          if (!logo || !logo.channel || !logo.url) continue;
-          const channel = String(logo.channel);
-          const feed = logo.feed ? String(logo.feed) : '';
-          const key = `${channel}::${feed}`;
-          const isInUse = Boolean(logo.in_use);
-          if (feed && (!logosByChannelFeed.has(key) || isInUse)) {
-            logosByChannelFeed.set(key, logo.url);
-          }
-          if (!logosByChannel.has(channel) || isInUse) {
-            logosByChannel.set(channel, logo.url);
-          }
-        }
-
-        const processedCategories = categoriesData
-          .filter((category: any) => category && category.id && category.name)
-          .map((category: any) => ({
-            id: String(category.id),
-            name: String(category.name),
-            description: String(category.description || ''),
-          }));
-
-        const processedStreams = streamsData.map((stream: any, index: number) => {
-          const channelMeta = stream.channel ? channelsById.get(stream.channel) : null;
-          const streamChannel = stream.channel ? String(stream.channel) : '';
-          const streamFeed = stream.feed ? String(stream.feed) : '';
-          const logoFromApi =
-            logosByChannelFeed.get(`${streamChannel}::${streamFeed}`) ||
-            logosByChannel.get(streamChannel) ||
-            '';
-          const categoryIds = Array.isArray(channelMeta?.categories)
-            ? channelMeta.categories.map((value: any) => String(value).trim()).filter(Boolean)
-            : [];
-          const categoryNames = categoryIds.map((id: string) => categoriesById.get(id)?.name || id);
-          return {
-            id: stream.id || `stream-${index + 1}`,
-            channel: stream.channel ?? null,
-            feed: stream.feed ?? null,
-            title: stream.title || channelMeta?.name || stream.channel || `Channel ${index + 1}`,
-            url: stream.url || '',
-            quality: stream.quality ?? null,
-            label: stream.label ?? null,
-            user_agent: stream.user_agent ?? null,
-            referrer: stream.referrer ?? stream.http_referrer ?? null,
-            logo: logoFromApi || stream.logo || channelMeta?.logo || '',
-            channel_country: channelMeta?.country ?? null,
-            channel_category_ids: categoryIds,
-            channel_categories: categoryNames.length ? categoryNames.join(', ') : null,
-            channel_name: channelMeta?.name ?? null,
-            channel_is_nsfw: Boolean(channelMeta?.is_nsfw),
-          };
-        });
-
-        setCategories(processedCategories);
-        setStreams(processedStreams);
-      } catch (error) {
+    let cancelled = false;
+    setLoad({ status: 'loading' });
+    loadCatalog()
+      .then((catalog) => !cancelled && setLoad({ status: 'ready', catalog }))
+      .catch((error: unknown) => {
         console.error('Failed to load IPTV data:', error);
-      } finally {
-        setIsLoading(false);
-      }
+        if (!cancelled) {
+          setLoad({ status: 'error', message: error instanceof Error ? error.message : 'The channel list failed to load.' });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  const catalog = load.status === 'ready' ? load.catalog : null;
+  const streams = useMemo(() => catalog?.streams ?? [], [catalog]);
+
+  // Lookup by id, and by primary URL for entries saved before ids were stable.
+  const streamIndex = useMemo(() => {
+    const map = new Map<string, Stream>();
+    for (const s of streams) {
+      map.set(s.url, s);
+      map.set(s.id, s);
     }
-
-    loadData();
-  }, []);
-
-  const countries = useMemo(() => {
-    const set = new Set<string>();
-    streams.forEach(s => {
-      if (s.channel_country) set.add(s.channel_country);
-    });
-    return ['All', ...Array.from(set).sort()];
+    return map;
   }, [streams]);
 
-  const filteredStreams = useMemo(() => {
-    let result = streams;
-    
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(stream => 
-        stream.title.toLowerCase().includes(query) ||
-        (stream.channel_name && stream.channel_name.toLowerCase().includes(query))
+  const favorites = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+
+  const countries: CountryOption[] = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of streams) if (s.channel_country) counts.set(s.channel_country, (counts.get(s.channel_country) ?? 0) + 1);
+    return [...counts]
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => countryName(a.code).localeCompare(countryName(b.code)));
+  }, [streams]);
+
+  const countryPool = useMemo(
+    () => (country === 'All' ? streams : streams.filter((s) => s.channel_country === country)),
+    [streams, country],
+  );
+
+  const languageOptions: LanguageOption[] = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of countryPool) for (const code of s.languages) counts.set(code, (counts.get(code) ?? 0) + 1);
+    return (catalog?.languages ?? [])
+      .filter((l) => counts.has(l.code))
+      .map((l) => ({ ...l, count: counts.get(l.code)! }));
+  }, [catalog, countryPool]);
+
+  // A language or category picked in one country may be empty in the next.
+  useEffect(() => {
+    if (language !== 'All' && catalog && !languageOptions.some((l) => l.code === language)) setLanguage('All');
+  }, [catalog, language, languageOptions]);
+
+  const pool = useMemo(
+    () => (language === 'All' ? countryPool : countryPool.filter((s) => s.languages.includes(language))),
+    [countryPool, language],
+  );
+
+  const categoryOptions: CategoryOption[] = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of pool) for (const id of s.channel_category_ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+    return (catalog?.categories ?? [])
+      .filter((c) => counts.has(c.id))
+      .map((c) => ({ id: c.id, name: c.name, count: counts.get(c.id)! }))
+      .sort((a, b) => b.count - a.count);
+  }, [catalog, pool]);
+
+  useEffect(() => {
+    if (categoryId === 'all' || categoryId === FAVORITES || !catalog) return;
+    if (!categoryOptions.some((c) => c.id === categoryId)) setCategoryId('all');
+  }, [catalog, categoryId, categoryOptions]);
+
+  const favoriteStreams = useMemo(
+    () => favoriteIds.map((id) => streamIndex.get(id)).filter((s): s is Stream => Boolean(s)),
+    [favoriteIds, streamIndex],
+  );
+
+  const recentStreams = useMemo(
+    () => recentIds.map((id) => streamIndex.get(id)).filter((s): s is Stream => Boolean(s)),
+    [recentIds, streamIndex],
+  );
+
+  const lastStream = lastId ? (streamIndex.get(lastId) ?? null) : null;
+
+  const gridStreams = useMemo(() => {
+    // My channels ignores the country and language filters: they're yours wherever you are.
+    let result = categoryId === FAVORITES ? favoriteStreams : pool;
+    if (categoryId !== 'all' && categoryId !== FAVORITES) {
+      result = result.filter((s) => s.channel_category_ids.includes(categoryId));
+    }
+    if (query) {
+      result = result.filter(
+        (s) => s.title.toLowerCase().includes(query) || s.channel_name?.toLowerCase().includes(query),
       );
     }
-
-    if (selectedCountry !== 'All') {
-      result = result.filter(stream => stream.channel_country === selectedCountry);
-    }
-
-    if (selectedCategoryId !== 'All') {
-      result = result.filter(stream => stream.channel_category_ids.includes(selectedCategoryId));
-    }
-
-    if (viewAllCategory) {
-      result = result.filter(stream => stream.channel_category_ids.includes(viewAllCategory.id));
-    }
-
     return result;
-  }, [streams, searchQuery, selectedCountry, selectedCategoryId, viewAllCategory]);
+  }, [pool, favoriteStreams, categoryId, query]);
 
-  const liveStreams = useMemo(() => {
-    if (viewAllCategory || isViewingAllLive) return []; // Don't show "Live Now" when viewing a specific category
-    return filteredStreams.slice(0, 8);
-  }, [filteredStreams, viewAllCategory, isViewingAllLive]);
-  
-  const categoriesWithStreams = useMemo(() => {
-    if (viewAllCategory || isViewingAllLive) return []; // Don't show other categories when viewing one
+  const homeRails = useMemo(
+    () =>
+      categoryOptions.slice(0, HOME_CATEGORIES).map((category) => ({
+        category,
+        streams: logosFirst(pool.filter((s) => s.channel_category_ids.includes(category.id))).slice(0, RAIL_SIZE),
+      })),
+    [categoryOptions, pool],
+  );
 
-    // Only show top 5 categories for now to keep it clean
-    return categories.slice(0, 5).map(cat => ({
-      ...cat,
-      streams: filteredStreams.filter(s => s.channel_category_ids.includes(cat.id)).slice(0, 8)
-    })).filter(cat => cat.streams.length > 0);
-  }, [categories, filteredStreams, viewAllCategory]);
+  const tunerPool = useMemo(() => {
+    const withLogos = pool.filter((s) => s.logo);
+    const base = withLogos.length ? withLogos : pool;
+    // Keep the last-watched channel tunable even without a logo.
+    return lastStream && !base.includes(lastStream) && pool.includes(lastStream) ? [lastStream, ...base] : base;
+  }, [pool, lastStream]);
 
-  const handleChannelClick = (stream: Stream) => {
-    setSelectedStream(stream);
+  const isGrid = Boolean(query) || categoryId !== 'all' || browsingAll;
+  const isFavoritesView = categoryId === FAVORITES;
+  const selectedCategory = categoryOptions.find((c) => c.id === categoryId);
+  const selectedLanguage = languageOptions.find((l) => l.code === language);
+  const place = country === 'All' ? null : countryInSentence(country);
+
+  const gridTitle = query
+    ? `“${searchQuery.trim()}”`
+    : isFavoritesView
+      ? 'My channels'
+      : (selectedCategory?.name ?? (country === 'All' ? 'All channels' : countryName(country)));
+
+  const emptyMessage = isFavoritesView && !query
+    ? 'Nothing here yet. Tap the star on any channel to keep it in My channels.'
+    : `No channels match${query ? ` “${searchQuery.trim()}”` : ''}${selectedCategory ? ` in ${selectedCategory.name}` : ''}${
+        selectedLanguage && !isFavoritesView ? ` in ${selectedLanguage.name}` : ''
+      }${place && !isFavoritesView ? ` from ${place}` : ''}. Check the spelling or clear the filters.`;
+
+  const play = useCallback((stream: Stream, queue: Stream[]) => {
+    setPlaying({ stream, queue });
+    writeString(LAST_KEY, stream.id);
+    setRecentIds((previous) => {
+      const next = [stream.id, ...previous.filter((id) => id !== stream.id && id !== stream.url)].slice(0, RECENT_LIMIT);
+      writeIds(RECENT_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const toggleFavorite = useCallback((stream: Stream) => {
+    setFavoriteIds((previous) => {
+      const next = previous.includes(stream.id)
+        ? previous.filter((id) => id !== stream.id)
+        : [stream.id, ...previous];
+      writeIds(FAVORITES_KEY, next);
+      return next;
+    });
+  }, []);
+
+  // Open a shared link (?watch=<id>) once the catalog is in.
+  useEffect(() => {
+    if (!catalog || deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
+    const id = new URLSearchParams(window.location.search).get(WATCH_PARAM);
+    const stream = id ? streamIndex.get(id) : undefined;
+    if (stream) play(stream, streams);
+    else if (id) window.history.replaceState(null, '', window.location.pathname);
+  }, [catalog, streamIndex, streams, play]);
+
+  // Keep the address bar pointing at what's playing, so it can be copied or bookmarked.
+  useEffect(() => {
+    if (!catalog) return;
+    const target = playing ? watchUrl(playing.stream.id) : window.location.pathname;
+    if (target !== window.location.href) window.history.replaceState(null, '', target);
+  }, [catalog, playing]);
+
+  const step = useCallback(
+    (direction: 1 | -1) => {
+      if (!playing || playing.queue.length === 0) return;
+      const { queue, stream } = playing;
+      const index = queue.findIndex((s) => s.id === stream.id);
+      const next = queue[(index + direction + queue.length) % queue.length];
+      play(next, queue);
+    },
+    [playing, play],
+  );
+  const playNext = useCallback(() => step(1), [step]);
+  const playPrevious = useCallback(() => step(-1), [step]);
+  const closePlayer = useCallback(() => setPlaying(null), []);
+  const tuneByNumber = useCallback((stream: Stream) => play(stream, streams), [play, streams]);
+
+  const goHome = () => {
+    setSearchQuery('');
+    setCategoryId('all');
+    setBrowsingAll(false);
+    window.scrollTo({ top: 0 });
   };
 
-  const handleNext = () => {
-    if (!selectedStream) return;
-    const currentIndex = filteredStreams.findIndex(s => s.id === selectedStream.id);
-    if (currentIndex < filteredStreams.length - 1) {
-      setSelectedStream(filteredStreams[currentIndex + 1]);
-    } else {
-      setSelectedStream(filteredStreams[0]); // Wrap around
-    }
+  const clearFilters = () => {
+    goHome();
+    setCountry('All');
+    setLanguage('All');
   };
 
-  const handlePrevious = () => {
-    if (!selectedStream) return;
-    const currentIndex = filteredStreams.findIndex(s => s.id === selectedStream.id);
-    if (currentIndex > 0) {
-      setSelectedStream(filteredStreams[currentIndex - 1]);
-    } else {
-      setSelectedStream(filteredStreams[filteredStreams.length - 1]); // Wrap around
-    }
-  };
-
-  const handleHeroWatchNow = () => {
-    const nbaStream = streams.find(s => s.title.toLowerCase().includes('nba')) || streams[0];
-    if (nbaStream) {
-      setSelectedStream(nbaStream);
-    }
+  const changeCategory = (id: string) => {
+    setCategoryId(id);
+    setBrowsingAll(id === 'all' ? false : browsingAll);
+    window.scrollTo({ top: 0 });
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Header 
-        searchQuery={searchQuery} 
-        onSearchChange={setSearchQuery} 
+    <div className="flex min-h-dvh flex-col">
+      <Header
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
         countries={countries}
-        selectedCountry={selectedCountry}
-        onCountryChange={setSelectedCountry}
-        categories={categories}
-        selectedCategoryId={selectedCategoryId}
-        onCategoryChange={setSelectedCategoryId}
+        selectedCountry={country}
+        onCountryChange={setCountry}
+        languages={languageOptions}
+        selectedLanguage={language}
+        onLanguageChange={setLanguage}
+        categories={categoryOptions}
+        totalInPool={pool.length}
+        favoriteCount={favoriteStreams.length}
+        selectedCategoryId={categoryId}
+        onCategoryChange={changeCategory}
+        onHome={goHome}
       />
 
-      <main className="pt-[110px] lg:pt-[70px]">
-        {isLoading ? (
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-          </div>
-        ) : (
-          <div className="max-w-[1600px] mx-auto">
-            {!viewAllCategory && !isViewingAllLive && <HeroSection onWatchNow={handleHeroWatchNow} />}
+      <main className="flex-1 pt-[109px]">
+        {load.status === 'loading' && <LoadingState />}
 
-            {(viewAllCategory || isViewingAllLive) && (
-              <div className="container mx-auto px-4 py-8">
-                <button 
-                  onClick={() => {
-                    setViewAllCategory(null);
-                    setIsViewingAllLive(false);
-                  }}
-                  className="mb-6 flex items-center gap-2 text-primary hover:underline font-medium"
-                >
-                  &larr; Back to Home
-                </button>
-                <h2 className="text-2xl md:text-3xl font-bold mb-8">
-                  {isViewingAllLive ? 'Live Now' : viewAllCategory?.name}
-                </h2>
-                <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-                  {filteredStreams.map((stream) => (
-                    <ChannelCard
-                      key={stream.id}
-                      name={stream.title}
-                      category={stream.channel_categories || (viewAllCategory?.name || 'Live')}
-                      thumbnail={stream.logo || 'https://images.unsplash.com/photo-1549403685-c4fa77cf85aa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=800'}
-                      isLive={true}
-                      onClick={() => handleChannelClick(stream)}
-                    />
-                  ))}
-                </div>
-                {filteredStreams.length === 0 && (
-                  <p className="text-muted-foreground text-center py-20">No channels found matching your filters.</p>
-                )}
-              </div>
-            )}
-
-            {!viewAllCategory && !isViewingAllLive && (
-              <>
-                <CategorySection title="Live Now" onViewAll={() => setIsViewingAllLive(true)}>
-                  {liveStreams.map((stream) => (
-                    <ChannelCard
-                      key={stream.id}
-                      name={stream.title}
-                      category={stream.channel_categories || 'General'}
-                      thumbnail={stream.logo || 'https://images.unsplash.com/photo-1549403685-c4fa77cf85aa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=800'}
-                      isLive={true}
-                      onClick={() => handleChannelClick(stream)}
-                    />
-                  ))}
-                </CategorySection>
-
-                {categoriesWithStreams.map((cat) => (
-                  <CategorySection 
-                    key={cat.id} 
-                    title={cat.name} 
-                    onViewAll={() => setViewAllCategory(cat)}
-                  >
-                    {cat.streams.map((stream) => (
-                      <ChannelCard
-                        key={stream.id}
-                        name={stream.title}
-                        category={stream.channel_categories || cat.name}
-                        thumbnail={stream.logo || 'https://images.unsplash.com/photo-1549403685-c4fa77cf85aa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=800'}
-                        isLive={false}
-                        onClick={() => handleChannelClick(stream)}
-                      />
-                    ))}
-                  </CategorySection>
-                ))}
-              </>
-            )}
+        {load.status === 'error' && (
+          <div className="mx-auto flex max-w-md flex-col items-center px-4 py-32 text-center">
+            <p className="font-mono text-[11px] tracking-[0.2em] text-onair uppercase">No signal</p>
+            <h1 className="mt-3 font-display text-4xl font-extrabold uppercase">The channel list didn't load</h1>
+            <p className="mt-3 text-dim">{load.message} Check your connection and try again.</p>
+            <button
+              type="button"
+              onClick={() => setAttempt((n) => n + 1)}
+              className="mt-7 flex h-11 items-center gap-2 rounded-full bg-amber px-6 font-semibold text-ink hover:bg-[#ffc56e]"
+            >
+              <RotateCw className="size-4" />
+              Try again
+            </button>
           </div>
         )}
 
-        <footer className="border-t border-border mt-16 py-8">
-          <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-              <div>
-                <h4 className="text-foreground mb-4">About Electrohm Haus TV</h4>
-                <p className="text-sm text-muted-foreground">
-                  Your premium IPTV streaming service with thousands of live channels and on-demand content.
-                </p>
-              </div>
-
-              <div>
-                <h4 className="text-foreground mb-4">Legal</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li><a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a></li>
-                  <li><a href="#" className="hover:text-foreground transition-colors">Terms of Service</a></li>
-                  <li><a href="#" className="hover:text-foreground transition-colors">DMCA Policy</a></li>
-                  <li><a href="#" className="hover:text-foreground transition-colors">Cookie Policy</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-foreground mb-4">Support</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li><a href="#" className="hover:text-foreground transition-colors">Contact Us</a></li>
-                  <li><a href="#" className="hover:text-foreground transition-colors">FAQs</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-foreground mb-4">Follow Us</h4>
-                <div className="flex gap-4">
-                  {/* Social icons placeholder */}
+        {catalog &&
+          (isGrid ? (
+            <ChannelGrid
+              title={gridTitle}
+              streams={gridStreams}
+              emptyMessage={emptyMessage}
+              onSelect={play}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+              onBack={goHome}
+              onClearFilters={clearFilters}
+            />
+          ) : (
+            <>
+              <Tuner
+                pool={tunerPool}
+                totalChannels={pool.length}
+                totalCountries={countries.length}
+                countryLabel={place}
+                resume={lastStream}
+                onWatch={(stream) => play(stream, tunerPool)}
+              />
+              <div className="border-t border-line pt-4 md:pt-6">
+                {favoriteStreams.length > 0 && (
+                  <CategorySection
+                    title="My channels"
+                    streams={favoriteStreams.slice(0, RAIL_SIZE)}
+                    total={favoriteStreams.length}
+                    onSelect={play}
+                    favorites={favorites}
+                    onToggleFavorite={toggleFavorite}
+                    onViewAll={favoriteStreams.length > RAIL_SIZE ? () => changeCategory(FAVORITES) : undefined}
+                  />
+                )}
+                {recentStreams.length > 0 && (
+                  <CategorySection
+                    title="Watched recently"
+                    streams={recentStreams}
+                    onSelect={play}
+                    favorites={favorites}
+                    onToggleFavorite={toggleFavorite}
+                  />
+                )}
+                {homeRails.map(({ category, streams: railStreams }) => (
+                  <CategorySection
+                    key={category.id}
+                    title={category.name}
+                    streams={railStreams}
+                    total={category.count}
+                    onSelect={play}
+                    favorites={favorites}
+                    onToggleFavorite={toggleFavorite}
+                    onViewAll={() => changeCategory(category.id)}
+                  />
+                ))}
+                <div className="mx-auto max-w-[1500px] px-4 pt-6 md:px-8">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBrowsingAll(true);
+                      window.scrollTo({ top: 0 });
+                    }}
+                    className="h-11 w-full rounded-full border border-line text-sm font-semibold transition-colors hover:border-amber hover:text-amber"
+                  >
+                    Browse all {pool.length.toLocaleString('en')} channels{place ? ` from ${place}` : ''}
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <div className="border-t border-border mt-8 pt-8 text-center text-sm text-muted-foreground">
-              <p>&copy; 2026 Electrohm Haus TV. All rights reserved.</p>
-            </div>
-          </div>
-        </footer>
+            </>
+          ))}
       </main>
 
-      {selectedStream && (
-        <VideoPlayer
-          stream={selectedStream}
-          onClose={() => setSelectedStream(null)}
-          onNext={handleNext}
-          onPrevious={handlePrevious}
-        />
+      <Footer />
+
+      {catalog && <ChannelEntry streams={streams} onTune={tuneByNumber} />}
+
+      {playing && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-ink/[0.97]" />}>
+          <VideoPlayer
+            stream={playing.stream}
+            isFavorite={favorites.has(playing.stream.id)}
+            shareUrl={watchUrl(playing.stream.id)}
+            onToggleFavorite={toggleFavorite}
+            onClose={closePlayer}
+            onNext={playNext}
+            onPrevious={playPrevious}
+          />
+        </Suspense>
       )}
 
-      {showInstallBanner && (
-        <div className="fixed bottom-24 left-4 right-4 z-[60] md:left-auto md:right-8 md:bottom-8 md:w-80">
-          <div className="bg-primary text-primary-foreground p-4 rounded-xl shadow-2xl border border-white/10 flex items-center justify-between gap-4">
-            <div>
-              <p className="font-semibold text-sm">Install Electrohm Haus TV</p>
-              <p className="text-xs opacity-90">Access your favorite streams faster on your device.</p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button 
-                onClick={() => setShowInstallBanner(false)}
-                className="p-1 hover:bg-black/10 rounded-lg text-xs"
-              >
-                Later
-              </button>
-              <button 
-                onClick={handleInstallClick}
-                className="bg-white text-primary px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-100"
-              >
-                Install
-              </button>
-            </div>
-          </div>
+      <InstallPrompt />
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="mx-auto max-w-[1500px] px-4 pt-10 md:px-8 md:pt-16" aria-busy="true" aria-label="Loading channels">
+      <div className="grid gap-10 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+        <div className="space-y-4">
+          <div className="h-3 w-48 animate-pulse rounded bg-panel" />
+          <div className="h-24 w-4/5 animate-pulse rounded bg-panel md:h-40" />
+          <div className="h-4 w-2/3 animate-pulse rounded bg-panel" />
         </div>
-      )}
+        <div className="h-72 animate-pulse rounded-2xl border border-line bg-panel" />
+      </div>
+      <p className="mt-10 font-mono text-[11px] tracking-[0.2em] text-dim uppercase">Scanning for channels…</p>
     </div>
   );
 }

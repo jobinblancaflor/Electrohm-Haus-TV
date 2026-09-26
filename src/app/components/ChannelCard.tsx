@@ -1,53 +1,52 @@
-import { Radio, Play } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { Play, Star } from 'lucide-react';
+import type { Stream } from '../types';
+import { channelNumber, countryName, primaryCategory } from '../lib/format';
+import { ChannelLogo } from './ChannelLogo';
 
 interface ChannelCardProps {
-  name: string;
-  category: string;
-  thumbnail: string;
-  isLive?: boolean;
-  viewers?: string;
-  onClick?: () => void;
+  stream: Stream;
+  onSelect: (stream: Stream) => void;
+  isFavorite: boolean;
+  onToggleFavorite: (stream: Stream) => void;
+  className?: string;
 }
 
-export function ChannelCard({ name, category, thumbnail, isLive, viewers, onClick }: ChannelCardProps) {
+export function ChannelCard({ stream, onSelect, isFavorite, onToggleFavorite, className = '' }: ChannelCardProps) {
   return (
-    <div
-      className="group relative bg-card rounded-xl overflow-hidden cursor-pointer transition-transform hover:scale-105 hover:shadow-xl"
-      onClick={onClick}
-    >
-      <div className="relative aspect-video">
-        <ImageWithFallback
-          src={thumbnail}
-          alt={name}
-          className="w-full h-full object-cover"
-        />
-...
-
-        {isLive && (
-          <div className="absolute top-3 left-3 flex items-center gap-1 bg-red-600 text-white px-2 py-1 rounded text-xs">
-            <Radio className="w-3 h-3" />
-            <span>LIVE</span>
-          </div>
-        )}
-
-        {viewers && (
-          <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded text-xs">
-            {viewers} watching
-          </div>
-        )}
-
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-          <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity transform scale-75 group-hover:scale-100">
-            <Play className="w-5 h-5 text-black fill-current ml-0.5" />
-          </div>
+    <div className={`group relative flex flex-col ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSelect(stream)}
+        aria-label={`Watch ${stream.title}`}
+        className="flex flex-col text-left focus-visible:outline-none"
+      >
+        <div className="relative aspect-[16/10] w-full rounded-lg border border-line bg-panel transition-[border-color,background-color,transform] duration-200 group-hover:-translate-y-0.5 group-hover:border-amber/70 group-hover:bg-raised group-has-[:focus-visible]:border-amber group-has-[:focus-visible]:ring-2 group-has-[:focus-visible]:ring-amber/40">
+          <span className="absolute top-2 left-2.5 font-mono text-[10px] tracking-wider text-dim">
+            CH {channelNumber(stream.number)}
+          </span>
+          <ChannelLogo src={stream.logo} name={stream.title} className="absolute inset-x-6 top-7 bottom-5 text-base" />
+          <span className="absolute right-2.5 bottom-2.5 flex size-8 translate-y-1 items-center justify-center rounded-full bg-amber text-ink opacity-0 transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-has-[:focus-visible]:translate-y-0 group-has-[:focus-visible]:opacity-100">
+            <Play className="ml-0.5 size-3.5 fill-current" />
+          </span>
         </div>
-      </div>
+        <span className="mt-2.5 line-clamp-1 pr-1 text-sm font-semibold text-paper">{stream.title}</span>
+        <span className="line-clamp-1 text-xs text-dim">
+          {primaryCategory(stream.channel_categories)} · {countryName(stream.channel_country)}
+        </span>
+      </button>
 
-      <div className="p-3 md:p-4">
-        <h3 className="text-sm md:text-base font-semibold text-foreground mb-0.5 line-clamp-1">{name}</h3>
-        <p className="text-[10px] md:text-sm text-muted-foreground line-clamp-1">{category}</p>
-      </div>
+      {/* Sibling of the watch button (buttons can't nest), laid over the plate's top-right corner. */}
+      <button
+        type="button"
+        onClick={() => onToggleFavorite(stream)}
+        aria-pressed={isFavorite}
+        aria-label={isFavorite ? `Remove ${stream.title} from My channels` : `Add ${stream.title} to My channels`}
+        className={`absolute top-0.5 right-0.5 flex size-8 items-center justify-center rounded-full transition duration-200 group-hover:-translate-y-0.5 hover:bg-ink/60 focus-visible:opacity-100 ${
+          isFavorite ? 'text-amber opacity-100' : 'text-dim opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-70'
+        }`}
+      >
+        <Star className={`size-4 ${isFavorite ? 'fill-current' : ''}`} />
+      </button>
     </div>
   );
 }
