@@ -22,7 +22,11 @@ and what's on next. Channels without data show nothing extra. No backend.
 - iptv-org does not host EPG files. `https://iptv-org.github.io/api/guides.json` maps
   `{channel, feed, site, site_id}`; for `site: "i.mjh.nz"`, `site_id` is `<file>#<channel id>`,
   e.g. `au/Adelaide/epg#mjh-7flix-ade`.
-- The schedule for that entry is `https://i.mjh.nz/<file>.xml.gz` (also `.xml`). 39 files are referenced.
+- The schedule for that entry is published at `https://i.mjh.nz/<file>.xml.gz` (also `.xml`). 39 files are referenced.
+- **Browser fetches must use the redirect target** `https://raw.githubusercontent.com/matthuisman/i.mjh.nz/refs/heads/master/<file>.xml.gz`.
+  `i.mjh.nz` redirects via `github.com/.../raw`, whose 302 sends an empty `Access-Control-Allow-Origin`, so Chrome
+  rejects the request ("Failed to fetch"). The raw host sends `Access-Control-Allow-Origin: *` and serves the `.gz`
+  bytes without `Content-Encoding`, so they must be decompressed in code (verified in Chrome: 3 MB in ~0.5 s).
 - Sizes vary widely: SamsungTVPlus/us 3 MB raw / 0.5 MB gz; PlutoTV/us 7.4 MB / 0.9 MB;
   Roku/all 34 MB / 3.1 MB; Plex/all 41 MB / 6.8 MB.
 - XMLTV `programme` elements carry `start`, `stop`, `channel` attributes (e.g. `20260927120000 +0000`)
@@ -62,10 +66,11 @@ export function parseXmltv(xml: string, windowStart: number, windowEnd: number):
 
 - Message in: `{ file: string }`. Message out: `{ file, ok: true, channels: Record<string, Programme[]> }`
   or `{ file, ok: false, error: string }`.
-- Fetch `https://i.mjh.nz/<file>.xml.gz` and decompress with `DecompressionStream('gzip')`;
-  if unsupported or the fetch fails, fetch `<file>.xml` instead.
+- Fetch `<GUIDE_BASE>/<file>.xml.gz` (GUIDE_BASE = the raw.githubusercontent.com URL above) and decompress with
+  `DecompressionStream('gzip')`; if unsupported or the fetch fails, fetch `<GUIDE_BASE>/<file>.xml` instead.
 - Window: now − 1 h to now + 12 h.
-- Parsed files are cached in the worker for the session; concurrent requests for one file share one fetch.
+- The worker is stateless; the session cache (one promise per file, shared by concurrent requests, failures kept)
+  lives in `useGuide`'s module so there is one cache, on the side that decides when to ask.
 
 ### 4. `src/app/guide/useGuide.ts`
 
