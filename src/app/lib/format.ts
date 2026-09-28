@@ -1,3 +1,4 @@
+// Framework-free: shared by the web app and mobile_app. No React, DOM or browser-only APIs.
 const regionNames = (() => {
   try {
     return new Intl.DisplayNames(['en'], { type: 'region' });
