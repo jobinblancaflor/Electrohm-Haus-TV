@@ -72,6 +72,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={{ paddingTop: insets.top + 10, paddingBottom: insets.bottom + 32 }}
         keyboardShouldPersistTaps="handled"
       >
@@ -206,6 +207,7 @@ function FilterButton({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink },
+  scroll: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.ink },
   scanning: { marginTop: 16, fontFamily: fonts.mono, fontSize: 11, letterSpacing: 2, color: colors.dim, textTransform: 'uppercase' },
   header: { paddingHorizontal: 16, gap: 12 },
