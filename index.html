@@ -1,22 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#3b82f6" />
-  <link rel="manifest" href="/manifest.json" />
-  <script>
-    window.__onGCastApiAvailable = function(isAvailable) {
-      if (isAvailable) {
-        window.isCastApiAvailable = true;
-      }
-    };
-  </script>
-  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
-  <title>Electrohm Haus TV - IPTV Streaming</title>
-</head>
-
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Browse and watch free live TV channels from around the world." />
+    <meta name="theme-color" content="#14111f" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Instrument+Sans:wght@400;500;600&family=Martian+Mono:wght@400;600&display=swap"
+    />
+    <script>
+      window.__onGCastApiAvailable = function (isAvailable) {
+        window.isCastApiAvailable = Boolean(isAvailable);
+        window.dispatchEvent(new CustomEvent('castapiready', { detail: isAvailable }));
+      };
+    </script>
+    <script async src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+    <title>Electrohm Haus TV — live channels from everywhere</title>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
