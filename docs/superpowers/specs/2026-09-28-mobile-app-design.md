@@ -118,6 +118,8 @@ mobile_app/
 - iOS: `NSAppTransportSecurity.NSAllowsArbitraryLoads = true` in `app.json` `ios.infoPlist`.
   Flagged for store review later; acceptable because v1 is not submitted.
 - App name "Electrohm TV", scheme `electrohmtv`, dark UI, icon/splash from the web favicon mark on #14111F.
+- Identifiers (permanent once published): Android `android.package` and iOS `ios.bundleIdentifier` are both
+  `com.electrohmhaussystems.electrohmtv`.
 
 ## Look and feel
 
