@@ -6,7 +6,7 @@
 
 **Architecture:** The web's framework-free TypeScript (`src/app/lib/catalog.ts`, `format.ts`, a new `selectors.ts`, `src/app/types.ts`) is imported by the mobile app through an `@shared/*` alias. Metro resolves the alias itself, and Jest resolves it with `moduleNameMapper`. A `CatalogProvider` loads the catalog, caches the processed result in a file, and exposes filters. expo-router gives three screens (Home, Browse, Player), and expo-video plays HLS with a fallback through backup sources.
 
-**Tech Stack:** Expo SDK 57 (React Native 0.86.3, React 19.2.3), expo-router ~57.0.23, expo-video ~57.0.5, expo-file-system ~57.0.7, @shopify/flash-list 2.0.2, @expo-google-fonts/*, @expo/vector-icons, jest-expo ~57.0.5; web side Vitest 5.
+**Tech Stack:** Expo SDK 57 (React Native 0.86.3, React 19.2.3), expo-router ~57.0.23, expo-video ~57.0.5, expo-file-system ~57.0.7, @shopify/flash-list 2.0.2, @expo-google-fonts/*, @expo/vector-icons, jest-expo ~57.0.5, react-native-google-mobile-ads 17.2.0, expo-tracking-transparency ~57.0.2; web side Vitest 5.
 
 **Spec:** `docs/superpowers/specs/2026-09-28-mobile-app-design.md`
 
@@ -24,6 +24,7 @@
 - Shared files stay framework-free: no React, DOM, `window`, or `localStorage`.
 - Copy is sentence case, from the user's side: "Watch", "Surf", "See all", "Try again", "Next channel", "Clear filters", "No signal".
 - Touch targets are at least 44 dp; every icon-only button has an `accessibilityLabel`.
+- Ads: test ad units in every build unless `EXPO_PUBLIC_REAL_ADS=1`. Android app ID `ca-app-pub-4201476043998878~7215985858`; banner `ca-app-pub-4201476043998878/3300791574`; interstitial `ca-app-pub-4201476043998878/2381183882`; iOS uses Google's sample app ID and test units. No ads on the player; the interstitial shows only on channel opens from Home/Browse, from the 3rd open, at most every 5 minutes.
 - Commit messages end with a blank line then `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Never `git add -A`; add explicit paths. `.claude/` stays untracked.
 
 ## File Structure
@@ -47,6 +48,7 @@
 | `mobile_app/src/catalog/usePlay.ts` | Open the player with a queue |
 | `mobile_app/src/player/source.ts` (+ test) | Stream → expo-video source |
 | `mobile_app/src/components/*` | ChannelLogo, ChannelCard, Chip, NoSignal, FilterSheet, Tuner, Rail |
+| `mobile_app/src/ads/*` | AdMob config (test/real units), interstitial policy (+ test) and controller, consent provider, banner |
 
 ---
 
@@ -2637,7 +2639,347 @@ git commit -m "Add mobile player with backup-stream fallback"
 
 ---
 
-### Task 7: Android build and on-device verification
+### Task 7: AdMob ads (test units by default)
+
+**Files:**
+- Create: `mobile_app/src/ads/config.ts`, `mobile_app/src/ads/policy.ts`, `mobile_app/src/ads/interstitial.ts`, `mobile_app/src/ads/AdsProvider.tsx`, `mobile_app/src/ads/Banner.tsx`
+- Test: `mobile_app/src/ads/policy.test.ts`
+- Modify: `mobile_app/app.json` (plugins), `mobile_app/app/_layout.tsx` (wrap in `AdsProvider`), `mobile_app/src/catalog/usePlay.ts` (interstitial gate), `mobile_app/app/index.tsx` (banner + Privacy choices), `mobile_app/app/browse.tsx` (banner)
+
+**Interfaces:**
+- Consumes: `usePlay` (Task 3), Home (Task 4), Browse (Task 5), `colors`/`fonts` (Task 2).
+- Produces:
+  - `adUnits: { banner: string; interstitial: string }` and `usingTestAds: boolean` (config.ts).
+  - `MIN_OPENS_BEFORE_FIRST = 3`, `MIN_INTERVAL_MS = 300_000`, `interface InterstitialState { opens: number; lastShownAt: number | null }`, and `shouldShowInterstitial(state, now): boolean` (policy.ts).
+  - `startInterstitials(): void` and `beforeChannelOpen(proceed: () => void): void` (interstitial.ts).
+  - `AdsProvider`, and `useAds(): { ready: boolean; privacyOptionsRequired: boolean; showPrivacyOptions: () => void }`.
+  - The `Banner()` component.
+
+- [ ] **Step 1: Install**
+
+From `mobile_app/`: `npx expo install react-native-google-mobile-ads expo-tracking-transparency`
+Expected: `react-native-google-mobile-ads` at `^17.2.0`, and `expo-tracking-transparency` at `~57.0.x`.
+
+- [ ] **Step 2: Configure the plugins**
+
+In `mobile_app/app.json`, append these two entries to `expo.plugins`, after the `expo-build-properties` entry:
+
+```json
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-4201476043998878~7215985858",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "userTrackingUsageDescription": "This lets Electrohm TV show ads that are more relevant to you."
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        { "userTrackingPermission": "This lets Electrohm TV show ads that are more relevant to you." }
+      ]
+```
+
+(The iOS app ID is Google's sample ID; replace it once the iOS AdMob app exists.)
+
+- [ ] **Step 3: Write the failing policy tests**
+
+Create `mobile_app/src/ads/policy.test.ts`:
+
+```ts
+import { describe, expect, it } from '@jest/globals';
+import { MIN_INTERVAL_MS, MIN_OPENS_BEFORE_FIRST, shouldShowInterstitial } from './policy';
+
+describe('shouldShowInterstitial', () => {
+  it('waits for the third channel open', () => {
+    expect(MIN_OPENS_BEFORE_FIRST).toBe(3);
+    expect(shouldShowInterstitial({ opens: 1, lastShownAt: null }, 0)).toBe(false);
+    expect(shouldShowInterstitial({ opens: 2, lastShownAt: null }, 0)).toBe(false);
+    expect(shouldShowInterstitial({ opens: 3, lastShownAt: null }, 0)).toBe(true);
+  });
+
+  it('shows at most once every five minutes', () => {
+    expect(MIN_INTERVAL_MS).toBe(5 * 60 * 1000);
+    expect(shouldShowInterstitial({ opens: 4, lastShownAt: 1000 }, 1000 + MIN_INTERVAL_MS - 1)).toBe(false);
+    expect(shouldShowInterstitial({ opens: 4, lastShownAt: 1000 }, 1000 + MIN_INTERVAL_MS)).toBe(true);
+  });
+});
+```
+
+Run from `mobile_app/`: `npm test`
+Expected: FAIL, "Cannot find module './policy'".
+
+- [ ] **Step 4: Implement the policy, config and interstitial controller**
+
+Create `mobile_app/src/ads/policy.ts`:
+
+```ts
+export const MIN_OPENS_BEFORE_FIRST = 3;
+export const MIN_INTERVAL_MS = 5 * 60 * 1000;
+
+export interface InterstitialState {
+  /** Channel opens from Home/Browse this session, including the one being decided. */
+  opens: number;
+  lastShownAt: number | null;
+}
+
+export function shouldShowInterstitial(state: InterstitialState, now: number): boolean {
+  if (state.opens < MIN_OPENS_BEFORE_FIRST) return false;
+  return state.lastShownAt === null || now - state.lastShownAt >= MIN_INTERVAL_MS;
+}
+```
+
+Run: `npm test`
+Expected: PASS, 13 tests (the 2 policy tests plus the 11 from earlier tasks).
+
+Create `mobile_app/src/ads/config.ts`:
+
+```ts
+import { Platform } from 'react-native';
+import { TestIds } from 'react-native-google-mobile-ads';
+
+// Real ad units only in builds made with EXPO_PUBLIC_REAL_ADS=1 (store releases). Every other build, including
+// local release APKs, uses Google's test units: real ads on your own devices count as invalid traffic.
+const REAL_ADS = process.env.EXPO_PUBLIC_REAL_ADS === '1';
+
+const ANDROID_UNITS = {
+  banner: 'ca-app-pub-4201476043998878/3300791574',
+  interstitial: 'ca-app-pub-4201476043998878/2381183882',
+};
+
+// iOS stays on test units until the iOS AdMob app exists.
+export const adUnits =
+  REAL_ADS && Platform.OS === 'android'
+    ? ANDROID_UNITS
+    : { banner: TestIds.ADAPTIVE_BANNER, interstitial: TestIds.INTERSTITIAL };
+
+export const usingTestAds = adUnits.banner === TestIds.ADAPTIVE_BANNER;
+```
+
+Create `mobile_app/src/ads/interstitial.ts`:
+
+```ts
+import { AdEventType, InterstitialAd } from 'react-native-google-mobile-ads';
+import { adUnits } from './config';
+import { shouldShowInterstitial, type InterstitialState } from './policy';
+
+let ad: InterstitialAd | null = null;
+let loaded = false;
+const state: InterstitialState = { opens: 0, lastShownAt: null };
+
+function preload() {
+  const next = InterstitialAd.createForAdRequest(adUnits.interstitial);
+  loaded = false;
+  next.addAdEventListener(AdEventType.LOADED, () => {
+    loaded = true;
+  });
+  next.addAdEventListener(AdEventType.ERROR, () => {
+    loaded = false;
+  });
+  next.load();
+  ad = next;
+}
+
+/** Called once ads may be requested (after consent and SDK init). */
+export function startInterstitials() {
+  if (!ad) preload();
+}
+
+/**
+ * Gate for opening a channel from Home or Browse: runs `proceed` straight away, or after an interstitial
+ * closes when one is loaded and the frequency policy allows it. A failed show still proceeds.
+ */
+export function beforeChannelOpen(proceed: () => void) {
+  state.opens += 1;
+  const now = Date.now();
+  const current = ad;
+  if (!current || !loaded || !shouldShowInterstitial(state, now)) {
+    proceed();
+    return;
+  }
+
+  let finished = false;
+  const unsubscribers: (() => void)[] = [];
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+    preload();
+    proceed();
+  };
+  unsubscribers.push(current.addAdEventListener(AdEventType.CLOSED, finish));
+  unsubscribers.push(current.addAdEventListener(AdEventType.ERROR, finish));
+  state.lastShownAt = now;
+  loaded = false;
+  current.show().catch(finish);
+}
+```
+
+- [ ] **Step 5: Provider and banner**
+
+Create `mobile_app/src/ads/AdsProvider.tsx`:
+
+```tsx
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
+import mobileAds, {
+  AdsConsent,
+  AdsConsentDebugGeography,
+  AdsConsentPrivacyOptionsRequirementStatus,
+} from 'react-native-google-mobile-ads';
+import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
+import { startInterstitials } from './interstitial';
+
+interface AdsContextValue {
+  /** Consent allows ads and the SDK is initialized. */
+  ready: boolean;
+  /** The user is in a region where a "Privacy choices" entry point is required. */
+  privacyOptionsRequired: boolean;
+  showPrivacyOptions: () => void;
+}
+
+const AdsContext = createContext<AdsContextValue>({
+  ready: false,
+  privacyOptionsRequired: false,
+  showPrivacyOptions: () => undefined,
+});
+
+// Set EXPO_PUBLIC_ADS_DEBUG_EEA=1 to see the EEA consent flow on an emulator or test device.
+const DEBUG_EEA = process.env.EXPO_PUBLIC_ADS_DEBUG_EEA === '1';
+
+export function AdsProvider({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  const [privacyOptionsRequired, setPrivacyOptionsRequired] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const info = await AdsConsent.gatherConsent(DEBUG_EEA ? { debugGeography: AdsConsentDebugGeography.EEA } : {});
+        if (cancelled) return;
+        setPrivacyOptionsRequired(
+          info.privacyOptionsRequirementStatus === AdsConsentPrivacyOptionsRequirementStatus.REQUIRED,
+        );
+        if (!info.canRequestAds) return;
+        if (Platform.OS === 'ios') await requestTrackingPermissionsAsync();
+        await mobileAds().initialize();
+        if (cancelled) return;
+        startInterstitials();
+        setReady(true);
+      } catch (error) {
+        // Ads are optional: the app works the same without them.
+        console.warn('Ads unavailable:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const showPrivacyOptions = useCallback(() => {
+    AdsConsent.showPrivacyOptionsForm().catch((error: unknown) => console.warn('Privacy options failed:', error));
+  }, []);
+
+  const value = useMemo(
+    () => ({ ready, privacyOptionsRequired, showPrivacyOptions }),
+    [ready, privacyOptionsRequired, showPrivacyOptions],
+  );
+  return <AdsContext.Provider value={value}>{children}</AdsContext.Provider>;
+}
+
+export function useAds() {
+  return useContext(AdsContext);
+}
+```
+
+Create `mobile_app/src/ads/Banner.tsx`:
+
+```tsx
+import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors } from '../theme';
+import { useAds } from './AdsProvider';
+import { adUnits } from './config';
+
+/** Anchored adaptive banner for the bottom of Home and Browse. Never used on the player. */
+export function Banner() {
+  const { ready } = useAds();
+  const insets = useSafeAreaInsets();
+  const [failed, setFailed] = useState(false);
+
+  if (!ready || failed) return null;
+
+  return (
+    <View style={[styles.slot, { paddingBottom: insets.bottom }]}>
+      <BannerAd unitId={adUnits.banner} size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} onAdFailedToLoad={() => setFailed(true)} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  slot: { alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.ink },
+});
+```
+
+- [ ] **Step 6: Wire it in**
+
+`mobile_app/app/_layout.tsx`: add `import { AdsProvider } from '../src/ads/AdsProvider';`, and wrap the returned `<CatalogProvider>…</CatalogProvider>` in `<AdsProvider>…</AdsProvider>`.
+
+`mobile_app/src/catalog/usePlay.ts`: add `import { beforeChannelOpen } from '../ads/interstitial';` and change the callback body to:
+
+```ts
+    (stream: Stream, queue: Stream[]) => {
+      beforeChannelOpen(() => {
+        setQueue(queue);
+        router.push({ pathname: '/player/[id]', params: { id: stream.id } });
+      });
+    },
+```
+
+Change its doc comment to: `/** Opens the player on stream (after an interstitial when one is due); previous/next then walk queue. */`
+
+`mobile_app/app/index.tsx`:
+- add `import { Banner } from '../src/ads/Banner';` and `import { useAds } from '../src/ads/AdsProvider';`;
+- inside `HomeScreen`, next to the other hooks, add `const { privacyOptionsRequired, showPrivacyOptions } = useAds();`;
+- directly after the "Browse all" `Pressable`, still inside the `ScrollView`, add:
+
+```tsx
+        {privacyOptionsRequired ? (
+          <Pressable onPress={showPrivacyOptions} accessibilityRole="button" hitSlop={8} style={styles.privacy}>
+            <Text style={styles.privacyLabel}>Privacy choices</Text>
+          </Pressable>
+        ) : null}
+```
+
+- add `<Banner />` right after the closing `</ScrollView>`, before the first `<FilterSheet`;
+- add to `styles`:
+
+```ts
+  privacy: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: 12 },
+  privacyLabel: { fontFamily: fonts.sans, fontSize: 13, color: colors.dim, textDecorationLine: 'underline' },
+```
+
+`mobile_app/app/browse.tsx`:
+- add `import { Banner } from '../src/ads/Banner';`;
+- wrap the `<FlashList … />` in `<View style={styles.list}>…</View>`, and put `<Banner />` right after that `View`, still inside the screen `View`;
+- add `list: { flex: 1 },` to `styles`.
+
+- [ ] **Step 7: Typecheck, test, bundle**
+
+Run from `mobile_app/`: `npm run typecheck && npm test && npx expo export --platform android --output-dir dist`
+Expected: all pass (13 tests). Delete `mobile_app/dist`.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add mobile_app/package.json mobile_app/package-lock.json mobile_app/app.json mobile_app/src/ads mobile_app/app/_layout.tsx mobile_app/src/catalog/usePlay.ts mobile_app/app/index.tsx mobile_app/app/browse.tsx
+git commit -m "Add AdMob banner and capped interstitial with consent (test ads by default)"
+```
+
+---
+
+### Task 8: Android build and on-device verification
 
 **Files:**
 - Modify only if verification finds a defect, and name each fix in the report.
@@ -2687,6 +3029,9 @@ Checklist:
 8. Rotate with `adb shell settings put system accelerometer_rotation 0 && adb shell settings put system user_rotation 1`: the player goes landscape; Home stays portrait after closing. Restore with `user_rotation 0`.
 9. Force-stop and relaunch (`adb shell am force-stop com.electrohmhaussystems.electrohmtv`, then launch again): Home appears quickly without "Scanning for channels…" (it came from the cache).
 10. With the network off (`adb shell svc wifi disable && adb shell svc data disable`) and the app data cleared (`adb shell pm clear com.electrohmhaussystems.electrohmtv`), launch: the No signal screen shows with Try again. Turn the network back on and tap Try again: Home loads.
+11. A **test** banner (labelled "Test Ad") shows at the bottom of Home and Browse, and never in the player.
+12. Open channels from Home or Browse: no interstitial on the 1st and 2nd opens; a **test** interstitial on the 3rd, and the player opens after closing it. No interstitial on the 4th open within 5 minutes, and none from player previous/next.
+13. Rebuild once with `EXPO_PUBLIC_ADS_DEBUG_EEA=1 npx expo prebuild --platform android --clean`, then `./gradlew assembleRelease`, `adb install -r`, `adb shell pm clear com.electrohmhaussystems.electrohmtv` and relaunch. The Google consent form appears on launch, and "Privacy choices" shows at the bottom of Home and opens the form. Rebuild without the variable afterwards.
 
 - [ ] **Step 4: Fix, re-verify, commit**
 
@@ -2708,7 +3053,8 @@ Write the report with each checklist item marked pass or fail, plus screenshot p
   - Platform config (cleartext, ATS, name, scheme, identifiers, icon and splash) → Task 2.
   - Theme and fonts → Task 2.
   - Error table: no cache + fetch fail → Task 3/4; unreadable cache → Task 3; stream fails → Task 6; unknown id → Task 6; logo fails → Task 4.
-  - Testing: Vitest selectors → Task 1; jest cache/source → Tasks 3 and 6; Android emulator → Task 7.
+  - Ads (the spec's "Ads" section) → Task 7; ad checks 11–13 → Task 8.
+  - Testing: Vitest selectors → Task 1; jest cache/source/policy → Tasks 3, 6 and 7; Android emulator → Task 8.
 - **Spec deviations, recorded:**
   - `expo-keep-awake` and `expo-screen-orientation` are replaced by expo-video's `keepScreenOnWhilePlaying` and native-stack's `orientation` option (fewer packages, same behaviour).
   - Icons use `@expo/vector-icons` (Ionicons), which the spec didn't name.

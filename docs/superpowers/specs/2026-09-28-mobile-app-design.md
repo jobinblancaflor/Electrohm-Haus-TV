@@ -14,7 +14,7 @@ channel catalog and watch a channel full screen, with the same identity and chan
 | Question | Decision | Why |
 |---|---|---|
 | Platforms / distribution | Android + iOS; no store submission in v1 | Store policies (Apple third-party content rules, Google Play IP policy) often reject IPTV aggregators; submission waits for a store-safe catalog mode. |
-| v1 scope | Core browse + play only | Favorites/recents, casting, PiP/background audio, TV guide are later versions. |
+| v1 scope | Core browse + play, plus AdMob banner/interstitial (added later, see Ads) | Favorites/recents, casting, PiP/background audio, TV guide are later versions. |
 | Framework | Expo (SDK 57, React Native 0.87) with expo-router and expo-video | Android builds locally (SDK + emulator present); iOS via EAS cloud builds or Expo Go (Windows can't build iOS). |
 | Code sharing | Import the web's framework-free TypeScript from `../src/app/lib` | One copy of catalog logic without restructuring the web app. |
 
@@ -148,6 +148,37 @@ mobile_app/
 - Android emulator run (`npx expo run:android`): first launch loads and caches; relaunch opens from cache;
   filters, chips, search, grid scrolling, Surf; playback, backup fallback (forced), rotation, No signal.
 - iOS: not testable on this machine; verified by the user through Expo Go on an iPhone or an EAS build.
+
+## Ads (AdMob)
+
+Added 2026-09-28 at the user's request.
+
+**Risk accepted by the user:** AdMob policy forbids ads in apps that give access to copyrighted content without
+authorization. With the full IPTV catalog, the AdMob account itself can be disabled. Real ads should go live only
+with a store-safe catalog.
+
+- Library: `react-native-google-mobile-ads` 17.2.0 (Expo config plugin; needs a dev/release build, not Expo Go),
+  plus `expo-tracking-transparency` for the iOS ATT prompt.
+- IDs:
+  - Android app ID `ca-app-pub-4201476043998878~7215985858`.
+  - Android ad units: banner `ca-app-pub-4201476043998878/3300791574`, interstitial `ca-app-pub-4201476043998878/2381183882`.
+  - iOS: Google's sample app ID `ca-app-pub-3940256099942544~1458002511` and test ad units until the user sends
+    iOS AdMob IDs.
+- **Test ads for testing:** real Android ad units are used only when the build sets `EXPO_PUBLIC_REAL_ADS=1`
+  (store releases). Every other build, including local release APKs used for verification, uses Google's
+  `TestIds.ADAPTIVE_BANNER` / `TestIds.INTERSTITIAL`. Real ads on your own devices count as invalid traffic.
+- Consent, once per launch: `AdsConsent.gatherConsent()` (Google UMP). If `canRequestAds`: on iOS, request ATT
+  ("This lets Electrohm TV show ads that are more relevant to you."), then `mobileAds().initialize()`. If consent
+  isn't given or anything fails, no ads load and the app works normally. `EXPO_PUBLIC_ADS_DEBUG_EEA=1` forces the
+  EEA consent flow for testing.
+- Privacy choices: a "Privacy choices" link at the bottom of Home, shown only when
+  `privacyOptionsRequirementStatus === REQUIRED`, calls `AdsConsent.showPrivacyOptionsForm()`.
+- Banner: an anchored adaptive banner fixed at the bottom of Home and Browse, above the bottom safe area; never on
+  the player. It is removed if it fails to load.
+- Interstitial: only when opening a channel from Home or Browse (`usePlay`). Never on launch, never on player
+  previous/next, never before the 3rd channel open in a session, at most once every 5 minutes. The next ad is
+  preloaded; the player opens after the ad closes, or immediately when no ad is ready or showing fails.
+- Before real ads: publish `app-ads.txt` on the developer website, and declare "Contains ads" in Play Console.
 
 ## Out of scope (v1)
 
