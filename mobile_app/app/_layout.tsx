@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { colors, fontAssets } from '../src/theme';
+import { CatalogProvider } from '../src/catalog/CatalogProvider';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -17,7 +18,7 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
-    <>
+    <CatalogProvider>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -26,7 +27,10 @@ export default function RootLayout() {
           orientation: 'portrait',
           animation: 'fade',
         }}
-      />
-    </>
+      >
+        {/* Only the player may rotate. */}
+        <Stack.Screen name="player/[id]" options={{ orientation: 'all', presentation: 'fullScreenModal' }} />
+      </Stack>
+    </CatalogProvider>
   );
 }
