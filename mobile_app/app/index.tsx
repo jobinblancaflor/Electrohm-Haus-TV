@@ -13,6 +13,8 @@ import { NoSignal } from '../src/components/NoSignal';
 import { Rail } from '../src/components/Rail';
 import { Tuner } from '../src/components/Tuner';
 import { colors, fonts } from '../src/theme';
+import { Banner } from '../src/ads/Banner';
+import { useAds } from '../src/ads/AdsProvider';
 
 const HOME_CATEGORIES = 6;
 const RAIL_SIZE = 16;
@@ -21,6 +23,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { load, retry, pool, countries, country, setCountry, languages, language, setLanguage, categories } = useCatalog();
   const play = usePlay();
+  const { privacyOptionsRequired, showPrivacyOptions } = useAds();
   const [query, setQuery] = useState('');
   const [sheet, setSheet] = useState<'country' | 'language' | null>(null);
 
@@ -145,7 +148,15 @@ export default function HomeScreen() {
             Browse all {formatCount(pool.length)} channels{place ? ` from ${place}` : ''}
           </Text>
         </Pressable>
+
+        {privacyOptionsRequired ? (
+          <Pressable onPress={showPrivacyOptions} accessibilityRole="button" hitSlop={8} style={styles.privacy}>
+            <Text style={styles.privacyLabel}>Privacy choices</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
+
+      <Banner />
 
       <FilterSheet
         visible={sheet === 'country'}
@@ -252,5 +263,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   browseAllLabel: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.paper },
+  privacy: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: 12 },
+  privacyLabel: { fontFamily: fonts.sans, fontSize: 13, color: colors.dim, textDecorationLine: 'underline' },
   pressed: { opacity: 0.7 },
 });

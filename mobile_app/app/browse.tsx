@@ -10,6 +10,7 @@ import { useCatalog } from '../src/catalog/CatalogProvider';
 import { usePlay } from '../src/catalog/usePlay';
 import { ChannelCard } from '../src/components/ChannelCard';
 import { colors, fonts } from '../src/theme';
+import { Banner } from '../src/ads/Banner';
 
 const GAP = 12;
 const SIDE = 16;
@@ -53,46 +54,50 @@ export default function BrowseScreen() {
 
   return (
     <View style={styles.screen}>
-      <FlashList
-        key={columns}
-        data={streams}
-        numColumns={columns}
-        keyExtractor={(s) => s.id}
-        contentContainerStyle={{ paddingHorizontal: SIDE - GAP / 2, paddingBottom: insets.bottom + 24 }}
-        ListHeaderComponent={
-          <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-            <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back to home" style={styles.back}>
-              <Ionicons name="arrow-back" size={18} color={colors.dim} />
-              <Text style={styles.backLabel}>Home</Text>
-            </Pressable>
-            <Text style={styles.title} numberOfLines={2}>
-              {title}
-            </Text>
-            <Text style={styles.count}>
-              {formatCount(streams.length)} {streams.length === 1 ? 'channel' : 'channels'}
-            </Text>
-          </View>
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{emptyMessage}</Text>
-            <Pressable onPress={clearFilters} accessibilityRole="button" style={({ pressed }) => [styles.clear, pressed && styles.pressed]}>
-              <Text style={styles.clearLabel}>Clear filters</Text>
-            </Pressable>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.cell}>
-            <ChannelCard stream={item} onPress={(s) => play(s, streams)} />
-          </View>
-        )}
-      />
+      <View style={styles.list}>
+        <FlashList
+          key={columns}
+          data={streams}
+          numColumns={columns}
+          keyExtractor={(s) => s.id}
+          contentContainerStyle={{ paddingHorizontal: SIDE - GAP / 2, paddingBottom: insets.bottom + 24 }}
+          ListHeaderComponent={
+            <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+              <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back to home" style={styles.back}>
+                <Ionicons name="arrow-back" size={18} color={colors.dim} />
+                <Text style={styles.backLabel}>Home</Text>
+              </Pressable>
+              <Text style={styles.title} numberOfLines={2}>
+                {title}
+              </Text>
+              <Text style={styles.count}>
+                {formatCount(streams.length)} {streams.length === 1 ? 'channel' : 'channels'}
+              </Text>
+            </View>
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>{emptyMessage}</Text>
+              <Pressable onPress={clearFilters} accessibilityRole="button" style={({ pressed }) => [styles.clear, pressed && styles.pressed]}>
+                <Text style={styles.clearLabel}>Clear filters</Text>
+              </Pressable>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.cell}>
+              <ChannelCard stream={item} onPress={(s) => play(s, streams)} />
+            </View>
+          )}
+        />
+      </View>
+      <Banner />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink },
+  list: { flex: 1 },
   header: { paddingHorizontal: GAP / 2, paddingBottom: 18 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, alignSelf: 'flex-start' },
   backLabel: { fontFamily: fonts.sansMedium, fontSize: 14, color: colors.dim },

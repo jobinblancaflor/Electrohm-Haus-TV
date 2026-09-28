@@ -12,7 +12,9 @@
       "bundleIdentifier": "com.electrohmhaussystems.electrohmtv",
       "supportsTablet": true,
       "infoPlist": {
-        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": true }
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       }
     },
     "android": {
@@ -38,8 +40,22 @@
       [
         "expo-build-properties",
         {
-          "android": { "usesCleartextTraffic": true }
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-4201476043998878~7215985858",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "userTrackingUsageDescription": "This lets Electrohm TV show ads that are more relevant to you."
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        { "userTrackingPermission": "This lets Electrohm TV show ads that are more relevant to you." }
       ]
     ]
   }
