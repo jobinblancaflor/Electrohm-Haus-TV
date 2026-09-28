@@ -14,6 +14,11 @@ import { colors, fonts } from '../src/theme';
 const GAP = 12;
 const SIDE = 16;
 
+/** Deep links can repeat a key; use the first value. */
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 function columnsFor(width: number) {
   if (width < 600) return 2;
   if (width < 900) return 3;
@@ -21,9 +26,9 @@ function columnsFor(width: number) {
 }
 
 export default function BrowseScreen() {
-  const params = useLocalSearchParams<{ categoryId?: string; query?: string }>();
-  const categoryId = params.categoryId || 'all';
-  const query = (params.query ?? '').trim();
+  const params = useLocalSearchParams<{ categoryId?: string | string[]; query?: string | string[] }>();
+  const categoryId = firstParam(params.categoryId) || 'all';
+  const query = (firstParam(params.query) ?? '').trim();
   const { pool, categories, country, setCountry, languages, language, setLanguage } = useCatalog();
   const play = usePlay();
   const insets = useSafeAreaInsets();
