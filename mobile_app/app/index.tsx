@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', gap: 8 },
   filterButton: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

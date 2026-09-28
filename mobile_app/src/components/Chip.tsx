@@ -25,7 +25,7 @@ export function Chip({ label, count, active = false, onPress }: ChipProps) {
 
 const styles = StyleSheet.create({
   chip: {
-    minHeight: 36,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

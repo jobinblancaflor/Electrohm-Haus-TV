@@ -21,7 +21,7 @@ export function Rail({ title, streams, total, onSelect, onSeeAll }: RailProps) {
       <View style={styles.head}>
         <Text style={styles.title}>{title}</Text>
         {onSeeAll ? (
-          <Pressable onPress={onSeeAll} hitSlop={12} accessibilityRole="button" accessibilityLabel={`See all ${title}`}>
+          <Pressable onPress={onSeeAll} hitSlop={12} accessibilityRole="button" accessibilityLabel={`See all ${title}`} style={styles.seeAllButton}>
             <Text style={styles.seeAll}>
               See all{total ? <Text style={styles.total}> {formatCount(total)}</Text> : null} →
             </Text>
@@ -47,6 +47,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: { fontFamily: fonts.display, fontSize: 26, lineHeight: 28, color: colors.paper, textTransform: 'uppercase' },
+  seeAllButton: { minHeight: 44, justifyContent: 'center' },
   seeAll: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.dim },
   total: { fontFamily: fonts.mono, fontSize: 11 },
   row: { gap: 12, paddingHorizontal: 16 },
