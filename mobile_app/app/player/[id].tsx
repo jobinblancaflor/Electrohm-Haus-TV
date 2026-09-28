@@ -9,6 +9,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { channelNumber } from '@shared/lib/format';
 import { useCatalog } from '../../src/catalog/CatalogProvider';
 import { NoSignal } from '../../src/components/NoSignal';
+import { AttemptTracker, attemptId } from '../../src/player/attempt';
 import { videoSource } from '../../src/player/source';
 import { colors, fonts } from '../../src/theme';
 
@@ -54,25 +55,39 @@ export default function PlayerScreen() {
   const advanceRef = useRef(advance);
   advanceRef.current = advance;
 
+  // Scopes each replaceAsync to one attempt, so a rejection and a statusChange error
+  // for the same failed load only advance once, and a late error for a superseded
+  // attempt (previous source or channel) never advances the current one.
+  const tracker = useRef(new AttemptTracker()).current;
+
   useEffect(() => {
     if (!stream) return;
     let cancelled = false;
     setFailed(false);
+    const attempt = attemptId(stream.id, sourceIndex, retryKey);
+    tracker.start(attempt);
     player
       .replaceAsync(videoSource(stream, stream.sources[sourceIndex] ?? stream.url))
       .then(() => {
-        if (!cancelled) player.play();
+        if (cancelled) return;
+        tracker.markReady(attempt);
+        player.play();
       })
       .catch(() => {
-        if (!cancelled) advanceRef.current();
+        if (!cancelled) tracker.fail(attempt, () => advanceRef.current());
       });
     return () => {
       cancelled = true;
     };
-  }, [player, stream?.id, sourceIndex, retryKey]);
+  }, [player, stream?.id, sourceIndex, retryKey, tracker]);
 
   useEventListener(player, 'statusChange', ({ status: next }) => {
-    if (next === 'error') advanceRef.current();
+    // An error before the current attempt's replaceAsync resolves belongs to the
+    // previous source and surfaces through its own rejection handler instead.
+    if (next === 'error' && tracker.isCurrentAttemptReady()) {
+      const attempt = tracker.currentAttempt();
+      if (attempt) tracker.fail(attempt, () => advanceRef.current());
+    }
   });
 
   useEffect(() => {
