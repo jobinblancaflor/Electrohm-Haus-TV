@@ -15,5 +15,3 @@ export const adUnits =
   REAL_ADS && Platform.OS === 'android'
     ? ANDROID_UNITS
     : { banner: TestIds.ADAPTIVE_BANNER, interstitial: TestIds.INTERSTITIAL };
-
-export const usingTestAds = adUnits.banner === TestIds.ADAPTIVE_BANNER;

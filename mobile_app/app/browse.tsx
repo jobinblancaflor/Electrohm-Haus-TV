@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,6 +11,8 @@ import { usePlay } from '../src/catalog/usePlay';
 import { ChannelCard } from '../src/components/ChannelCard';
 import { colors, fonts } from '../src/theme';
 import { Banner } from '../src/ads/Banner';
+import { useAds } from '../src/ads/AdsProvider';
+import { goBackOrHome } from '../src/navigation';
 
 const GAP = 12;
 const SIDE = 16;
@@ -33,6 +35,7 @@ export default function BrowseScreen() {
   const { pool, categories, country, setCountry, languages, language, setLanguage } = useCatalog();
   const play = usePlay();
   const insets = useSafeAreaInsets();
+  const { ready: adsReady } = useAds();
   const { width } = useWindowDimensions();
 
   const streams = useMemo(() => filterStreams(pool, categoryId, query), [pool, categoryId, query]);
@@ -49,7 +52,7 @@ export default function BrowseScreen() {
   const clearFilters = () => {
     setCountry('All');
     setLanguage('All');
-    router.back();
+    goBackOrHome();
   };
 
   return (
@@ -60,10 +63,10 @@ export default function BrowseScreen() {
           data={streams}
           numColumns={columns}
           keyExtractor={(s) => s.id}
-          contentContainerStyle={{ paddingHorizontal: SIDE - GAP / 2, paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingHorizontal: SIDE - GAP / 2, paddingBottom: (adsReady ? 0 : insets.bottom) + 24 }}
           ListHeaderComponent={
             <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-              <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back to home" style={styles.back}>
+              <Pressable onPress={goBackOrHome} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back to home" style={styles.back}>
                 <Ionicons name="arrow-back" size={18} color={colors.dim} />
                 <Text style={styles.backLabel}>Home</Text>
               </Pressable>

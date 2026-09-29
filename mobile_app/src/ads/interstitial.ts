@@ -5,6 +5,7 @@ import { shouldShowInterstitial, type InterstitialState } from './policy';
 let ad: InterstitialAd | null = null;
 let loaded = false;
 let loadFailed = false;
+let showing = false;
 const state: InterstitialState = { opens: 0, lastShownAt: null };
 
 function preload() {
@@ -32,6 +33,8 @@ export function startInterstitials() {
  * closes when one is loaded and the frequency policy allows it. A failed show still proceeds.
  */
 export function beforeChannelOpen(proceed: () => void) {
+  // A second tap while an interstitial is up must not queue another open, nor count as one.
+  if (showing) return;
   state.opens += 1;
   const now = Date.now();
   const current = ad;
@@ -48,6 +51,7 @@ export function beforeChannelOpen(proceed: () => void) {
   const finish = () => {
     if (finished) return;
     finished = true;
+    showing = false;
     unsubscribers.forEach((unsubscribe) => unsubscribe());
     preload();
     proceed();
@@ -55,6 +59,7 @@ export function beforeChannelOpen(proceed: () => void) {
   unsubscribers.push(current.addAdEventListener(AdEventType.CLOSED, finish));
   unsubscribers.push(current.addAdEventListener(AdEventType.ERROR, finish));
   state.lastShownAt = now;
+  showing = true;
   loaded = false;
   current.show().catch(finish);
 }
