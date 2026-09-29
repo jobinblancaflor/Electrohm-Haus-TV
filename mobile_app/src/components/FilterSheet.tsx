@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatCount } from '@shared/lib/format';
@@ -36,7 +36,7 @@ export function FilterSheet({ visible, title, options, selected, onSelect, onClo
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.container} behavior="padding">
         <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel={`Close ${title} picker`} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
           <View style={styles.grabber} />
