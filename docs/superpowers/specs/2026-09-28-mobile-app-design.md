@@ -15,14 +15,14 @@ channel catalog and watch a channel full screen, with the same identity and chan
 |---|---|---|
 | Platforms / distribution | Android + iOS; no store submission in v1 | Store policies (Apple third-party content rules, Google Play IP policy) often reject IPTV aggregators; submission waits for a store-safe catalog mode. |
 | v1 scope | Core browse + play, plus AdMob banner/interstitial (added later, see Ads) | Favorites/recents, casting, PiP/background audio, TV guide are later versions. |
-| Framework | Expo (SDK 57, React Native 0.87) with expo-router and expo-video | Android builds locally (SDK + emulator present); iOS via EAS cloud builds or Expo Go (Windows can't build iOS). |
+| Framework | Expo (SDK 57, React Native 0.86.3) with expo-router and expo-video | Android builds locally (SDK + emulator present); iOS via EAS cloud builds or Expo Go (Windows can't build iOS). |
 | Code sharing | Import the web's framework-free TypeScript from `../src/app/lib` | One copy of catalog logic without restructuring the web app. |
 
 ## Environment facts
 
 - Windows 10; Node 24; Java 21 (Android Studio JBR); `ANDROID_HOME=F:\AndroidSDK` with emulator and
   platform-tools; AVD `Medium_Phone_API_36.1`.
-- Latest: `expo` 57.0.25, `react-native` 0.87.1, `expo-video` 57.0.5.
+- Latest: `expo` 57.0.25, `react-native` 0.86.3 (the version Expo 57 pins), `expo-video` 57.0.5.
 
 ## Structure
 
@@ -42,13 +42,13 @@ mobile_app/
     theme.ts             tokens copied from web `src/styles/index.css` @theme
   app.json               Expo config (name, scheme, orientation, plugins)
   metro.config.js        watchFolders include the repo root so `../src/app/lib` resolves
-  tsconfig.json          extends expo/tsconfig.base; path alias `@shared/*` → `../src/app/lib/*`
+  tsconfig.json          extends expo/tsconfig.base; path alias `@shared/*` → `../src/app/*` (so `@shared/lib/format`, `@shared/types`)
   package.json
 ```
 
 ## Shared code
 
-- Mobile imports `src/app/lib/catalog.ts`, `src/app/lib/format.ts`, `src/app/types.ts` via `@shared/*`.
+- Mobile imports `src/app/lib/catalog.ts`, `src/app/lib/format.ts`, `src/app/types.ts` via `@shared/*`. Icons come from `@expo/vector-icons` (Ionicons).
 - New `src/app/lib/selectors.ts` (pure), used by web and mobile. It takes the filter logic now inline in web
   `App.tsx`:
 
@@ -67,7 +67,8 @@ mobile_app/
   `CountryOption`, `CategoryOption`, `LanguageOption` move from `Header.tsx` into `selectors.ts`
   (`Header.tsx` re-imports them). The web `App.tsx` is refactored to call these; behaviour is unchanged.
 - The shared files get a header comment: framework-free — no React, DOM or browser-only APIs.
-  `format.ts` already falls back when `Intl.DisplayNames` is missing (Hermes may lack it), returning the code.
+  `format.ts` already falls back when `Intl.DisplayNames` is missing (Hermes may lack it), returning the code. On Hermes/Android `Intl.DisplayNames` can return bare codes instead, so
+  `regionNames.ts` (a bundled region-name table) is used as a fallback.
 - `storage.ts` (localStorage) is not shared.
 
 ## Data and caching
@@ -106,11 +107,15 @@ mobile_app/
 - Backup streams: on player `statusChange` to `error`, move to the next URL in `stream.sources`; while retrying
   show "Trying backup stream N of M"; after the last fails show `NoSignal` with **Try again** (restart at
   source 1) and **Next channel**.
+- Reconnects: `AttemptTracker` (`src/player/attempt.ts`) collapses duplicate or stale failure signals so each
+  attempt advances the chain once. A source that was playing and then errors is reloaded up to 2 consecutive
+  times (the budget refills when playback resumes) before it counts as dead; a source that never played fails
+  at once. Try again resets both the budget and the "was playing" state.
 - Previous/next walk the list the user came from (the rail, grid or the tuner pool), wrapping around; the list is
   passed through the catalog context, not route params.
-- Orientation: the player unlocks rotation (`expo-screen-orientation`) and restores portrait on leave; other
-  screens are portrait.
-- Keep the screen awake while playing (`expo-keep-awake`).
+- Orientation: set per screen through the expo-router `Stack` `orientation` option (player `all`, other
+  screens `portrait`); no `expo-screen-orientation`.
+- Keep the screen awake while playing via expo-video's `keepScreenOnWhilePlaying` (no `expo-keep-awake`).
 
 ## Platform configuration
 
