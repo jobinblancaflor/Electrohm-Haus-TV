@@ -58,5 +58,8 @@
         { "userTrackingPermission": "This lets Electrohm TV show ads that are more relevant to you." }
       ]
     ]
+  },
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-4201476043998878~7215985858"
   }
 }
