@@ -125,7 +125,7 @@ describe('AttemptTracker reconnects', () => {
     expect(h.reload).toHaveBeenCalledTimes(4);
   });
 
-  it('forgets spent reconnects on resetReconnects (Try again)', () => {
+  it('forgets spent reconnects on reset (Try again)', () => {
     const tracker = new AttemptTracker();
     const h = handlers();
     load(tracker, 's#0#0', true);
@@ -133,12 +133,25 @@ describe('AttemptTracker reconnects', () => {
     load(tracker, 's#0#1');
     tracker.statusError('s#0#1', h); // budget spent
 
-    tracker.resetReconnects();
-    load(tracker, 's#0#2');
+    tracker.reset();
+    load(tracker, 's#0#2', true); // Try again plays, then drops
     tracker.statusError('s#0#2', h);
 
     expect(h.reload).toHaveBeenCalledTimes(3);
     expect(h.onAdvance).not.toHaveBeenCalled();
+  });
+
+  it('advances without reload on an error before playing after reset (dead stream, Try again)', () => {
+    const tracker = new AttemptTracker();
+    const h = handlers();
+    load(tracker, 's#0#0', true); // had played
+
+    tracker.reset();
+    load(tracker, 's#0#1'); // Try again: same source, not yet playing
+    tracker.statusError('s#0#1', h);
+
+    expect(h.reload).not.toHaveBeenCalled();
+    expect(h.onAdvance).toHaveBeenCalledTimes(1);
   });
 
   it('ignores playback and errors for a superseded attempt, and playback before the load resolved', () => {

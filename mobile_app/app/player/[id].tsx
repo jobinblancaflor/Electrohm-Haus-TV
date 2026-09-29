@@ -11,6 +11,7 @@ import { useCatalog } from '../../src/catalog/CatalogProvider';
 import { NoSignal } from '../../src/components/NoSignal';
 import { AttemptTracker, attemptId } from '../../src/player/attempt';
 import { videoSource } from '../../src/player/source';
+import { goBackOrHome } from '../../src/navigation';
 import { colors, fonts } from '../../src/theme';
 
 const HIDE_CONTROLS_MS = 4000;
@@ -43,7 +44,7 @@ export default function PlayerScreen() {
 
   // A stale link or refreshed catalog can point at a channel that no longer exists.
   useEffect(() => {
-    if (load.status === 'ready' && !stream) router.replace('/');
+    if (load.status !== 'loading' && !stream) router.replace('/');
   }, [load.status, stream]);
 
   const advance = useCallback(() => {
@@ -128,7 +129,7 @@ export default function PlayerScreen() {
 
   const retry = () => {
     if (!stream) return;
-    tracker.resetReconnects();
+    tracker.reset();
     setSource({ streamId: stream.id, index: 0 });
     setRetryKey((k) => k + 1);
   };
@@ -143,6 +144,9 @@ export default function PlayerScreen() {
     return (
       <View style={[styles.screen, styles.center]}>
         <ActivityIndicator size="large" color={colors.amber} />
+        <View style={[styles.topBar, styles.topBarBare, { paddingTop: insets.top + 8, paddingLeft: insets.left + 12 }]}>
+          <IconButton name="arrow-back" label="Close player" onPress={goBackOrHome} />
+        </View>
       </View>
     );
   }
@@ -156,6 +160,7 @@ export default function PlayerScreen() {
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={() => (controlsVisible ? setControlsVisible(false) : showControls())}
+        accessibilityRole="button"
         accessibilityLabel={controlsVisible ? 'Hide controls' : 'Show controls'}
       />
 
@@ -185,7 +190,7 @@ export default function PlayerScreen() {
       {showOverlay ? (
         <>
           <View style={[styles.topBar, { paddingTop: insets.top + 8, paddingLeft: insets.left + 12, paddingRight: insets.right + 12 }]}>
-            <IconButton name="arrow-back" label="Close player" onPress={() => router.back()} />
+            <IconButton name="arrow-back" label="Close player" onPress={goBackOrHome} />
             <View style={styles.live}>
               <View style={styles.liveDot} />
               <Text style={styles.liveText}>LIVE</Text>
@@ -242,6 +247,7 @@ function IconButton({
 }
 
 const styles = StyleSheet.create({
+  // Pure black on purpose: the video letterbox must not glow, so it sits outside the palette.
   screen: { flex: 1, backgroundColor: '#000' },
   center: { alignItems: 'center', justifyContent: 'center' },
   backup: {
@@ -268,10 +274,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   live: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 3, backgroundColor: colors.onair, paddingHorizontal: 7, paddingVertical: 3 },
-  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
-  liveText: { fontFamily: fonts.monoSemiBold, fontSize: 9, letterSpacing: 2, color: '#fff' },
+  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.paper },
+  liveText: { fontFamily: fonts.monoSemiBold, fontSize: 9, letterSpacing: 2, color: colors.paper },
   channel: { fontFamily: fonts.monoSemiBold, fontSize: 13, color: colors.amber },
   title: { flex: 1, fontFamily: fonts.display, fontSize: 24, color: colors.paper, textTransform: 'uppercase' },
+  topBarBare: { backgroundColor: 'transparent' },
   bottomBar: {
     position: 'absolute',
     bottom: 0,

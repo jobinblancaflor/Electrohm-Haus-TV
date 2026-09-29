@@ -19,7 +19,10 @@ export function attemptSource(attempt: string): string {
   return attempt.slice(0, attempt.lastIndexOf('#'));
 }
 
-/** Consecutive reloads of a stream that was playing before the source is treated as dead. */
+/**
+ * Consecutive reloads of a stream that was playing before the source is treated as dead. The budget refills
+ * whenever playback resumes, so a stream that repeatedly plays briefly and then drops keeps reconnecting, by design.
+ */
 export const MAX_RECONNECTS = 2;
 
 export class AttemptTracker {
@@ -49,9 +52,10 @@ export class AttemptTracker {
     this.reconnects = 0;
   }
 
-  /** Forget spent reconnects (user pressed Try again). */
-  resetReconnects(): void {
+  /** Try again: forget spent reconnects and that the source ever played, so a dead stream fails at once. */
+  reset(): void {
     this.reconnects = 0;
+    this.played = false;
   }
 
   /**
