@@ -23,7 +23,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { load, retry, pool, countries, country, setCountry, languages, language, setLanguage, categories } = useCatalog();
   const play = usePlay();
-  const { privacyOptionsRequired, showPrivacyOptions } = useAds();
+  const { ready: adsReady, privacyOptionsRequired, showPrivacyOptions } = useAds();
   const [query, setQuery] = useState('');
   const [sheet, setSheet] = useState<'country' | 'language' | null>(null);
 
@@ -58,7 +58,7 @@ export default function HomeScreen() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <NoSignal
           title="The channel list didn't load"
-          message={`${load.message} Check your connection and try again.`}
+          message="Check your connection and try again."
           actions={[{ label: 'Try again', onPress: retry, primary: true }]}
         />
       </View>
@@ -73,7 +73,7 @@ export default function HomeScreen() {
     <View style={styles.screen}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingTop: insets.top + 10, paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingTop: insets.top + 10, paddingBottom: (adsReady ? 0 : insets.bottom) + 32 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>

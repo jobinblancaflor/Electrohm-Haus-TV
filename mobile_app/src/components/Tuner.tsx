@@ -89,7 +89,7 @@ export function Tuner({ pool, totalChannels, totalCountries, countryLabel, onWat
               accessibilityLabel={`Channel ${shownNumber}`}
               accessibilityLiveRegion="polite"
             >
-              {channelNumber(shownNumber)}
+              CH {channelNumber(shownNumber)}
             </Text>
           </View>
           <ChannelLogo
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   panelTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   label: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.dim, textTransform: 'uppercase' },
-  readout: { marginTop: 4, fontFamily: fonts.monoSemiBold, fontSize: 52, lineHeight: 60, color: colors.amber },
+  readout: { marginTop: 4, fontFamily: fonts.monoSemiBold, fontSize: 42, lineHeight: 50, color: colors.amber },
   readoutRolling: { opacity: 0.6 },
   logoPlate: {
     width: 76,
