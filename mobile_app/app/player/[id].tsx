@@ -14,7 +14,6 @@ import { videoSource } from '../../src/player/source';
 import { colors, fonts } from '../../src/theme';
 
 const HIDE_CONTROLS_MS = 4000;
-const MAX_RECONNECTS = 2;
 const OFFLINE_MESSAGE = "This channel isn't responding. It may be off air or blocked in your region.";
 
 export default function PlayerScreen() {
@@ -60,7 +59,6 @@ export default function PlayerScreen() {
   // for the same failed load only advance once, and a late error for a superseded
   // attempt (previous source or channel) never advances the current one.
   const tracker = useRef(new AttemptTracker()).current;
-  const reconnects = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!stream) return;
@@ -86,20 +84,22 @@ export default function PlayerScreen() {
   useEventListener(player, 'statusChange', ({ status: next }) => {
     // An error before the current attempt's replaceAsync resolves belongs to the
     // previous source and surfaces through its own rejection handler instead.
+    const attempt = tracker.currentAttempt();
+    if (!attempt) return;
+    if (next === 'readyToPlay' && player.playing) tracker.markPlaying(attempt);
     if (next === 'error' && tracker.isCurrentAttemptReady()) {
-      const attempt = tracker.currentAttempt();
-      if (!attempt) return;
       // A live stream that was playing can fall behind its window (BehindLiveWindowException) or drop
-      // briefly: reload the same source a couple of times before treating it as dead.
-      const key = attempt.slice(0, attempt.lastIndexOf('#'));
-      const used = reconnects.current[key] ?? 0;
-      if (used < MAX_RECONNECTS) {
-        reconnects.current[key] = used + 1;
-        setRetryKey((k) => k + 1);
-      } else {
-        tracker.fail(attempt, () => advanceRef.current());
-      }
+      // briefly: the tracker reloads it a couple of times, but a source that never played fails at once.
+      tracker.statusError(attempt, {
+        reload: () => setRetryKey((k) => k + 1),
+        onAdvance: () => advanceRef.current(),
+      });
     }
+  });
+
+  useEventListener(player, 'playingChange', ({ isPlaying: playing }) => {
+    const attempt = tracker.currentAttempt();
+    if (playing && attempt) tracker.markPlaying(attempt);
   });
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export default function PlayerScreen() {
 
   const retry = () => {
     if (!stream) return;
-    reconnects.current = {};
+    tracker.resetReconnects();
     setSource({ streamId: stream.id, index: 0 });
     setRetryKey((k) => k + 1);
   };

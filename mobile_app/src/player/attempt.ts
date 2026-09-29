@@ -14,14 +14,59 @@ export function attemptId(streamId: string, sourceIndex: number, retryKey: numbe
   return `${streamId}#${sourceIndex}#${retryKey}`;
 }
 
+/** The (stream, source) an attempt belongs to, ignoring the retry key, so reconnects share one budget. */
+export function attemptSource(attempt: string): string {
+  return attempt.slice(0, attempt.lastIndexOf('#'));
+}
+
+/** Consecutive reloads of a stream that was playing before the source is treated as dead. */
+export const MAX_RECONNECTS = 2;
+
 export class AttemptTracker {
   private current: string | null = null;
   private ready: string | null = null;
   private advanced: string | null = null;
+  private played = false;
+  private reconnects = 0;
 
-  /** Call when a new `replaceAsync` starts. */
+  /**
+   * Call when a new `replaceAsync` starts. A different stream or source starts over (not played, full budget);
+   * a reload of the same source keeps `played`, so a dropped stream gets its consecutive reconnects.
+   */
   start(attempt: string): void {
+    if (this.current === null || attemptSource(this.current) !== attemptSource(attempt)) {
+      this.reconnects = 0;
+      this.played = false;
+    }
     this.current = attempt;
+  }
+
+  /** Playback actually started (or resumed) for `attempt`: it may now reconnect, and the budget refills. */
+  markPlaying(attempt: string): void {
+    // Ignore playback events from a superseded source or from before this attempt's load resolved.
+    if (attempt !== this.current || this.ready !== attempt) return;
+    this.played = true;
+    this.reconnects = 0;
+  }
+
+  /** Forget spent reconnects (user pressed Try again). */
+  resetReconnects(): void {
+    this.reconnects = 0;
+  }
+
+  /**
+   * A status error for `attempt`. If it had played and the budget allows, calls `reload` (the caller starts a
+   * new attempt for the same source); otherwise reports the failure through `fail`, so this stays the single
+   * path that advances the backup chain.
+   */
+  statusError(attempt: string, handlers: { reload: () => void; onAdvance: () => void }): void {
+    if (attempt !== this.current) return;
+    if (this.played && this.reconnects < MAX_RECONNECTS) {
+      this.reconnects += 1;
+      handlers.reload();
+      return;
+    }
+    this.fail(attempt, handlers.onAdvance);
   }
 
   /** Call when that attempt's `replaceAsync` has resolved. */
