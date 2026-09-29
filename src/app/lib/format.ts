@@ -1,4 +1,5 @@
 // Framework-free: shared by the web app and mobile_app. No React, DOM or browser-only APIs.
+import { REGION_NAMES } from './regionNames';
 const regionNames = (() => {
   try {
     return new Intl.DisplayNames(['en'], { type: 'region' });
@@ -13,7 +14,9 @@ export function countryName(code: string | null | undefined): string {
   if (code === 'UK') return 'United Kingdom';
   if (code === 'INT') return 'International';
   try {
-    return regionNames?.of(code) ?? code;
+    const name = regionNames?.of(code);
+    // Hermes on Android has no region data and answers with the bare code.
+    return name && name !== code ? name : (REGION_NAMES[code] ?? code);
   } catch {
     return code;
   }
