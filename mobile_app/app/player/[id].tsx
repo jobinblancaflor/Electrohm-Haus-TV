@@ -14,6 +14,7 @@ import { videoSource } from '../../src/player/source';
 import { colors, fonts } from '../../src/theme';
 
 const HIDE_CONTROLS_MS = 4000;
+const MAX_RECONNECTS = 2;
 const OFFLINE_MESSAGE = "This channel isn't responding. It may be off air or blocked in your region.";
 
 export default function PlayerScreen() {
@@ -59,6 +60,7 @@ export default function PlayerScreen() {
   // for the same failed load only advance once, and a late error for a superseded
   // attempt (previous source or channel) never advances the current one.
   const tracker = useRef(new AttemptTracker()).current;
+  const reconnects = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!stream) return;
@@ -86,7 +88,17 @@ export default function PlayerScreen() {
     // previous source and surfaces through its own rejection handler instead.
     if (next === 'error' && tracker.isCurrentAttemptReady()) {
       const attempt = tracker.currentAttempt();
-      if (attempt) tracker.fail(attempt, () => advanceRef.current());
+      if (!attempt) return;
+      // A live stream that was playing can fall behind its window (BehindLiveWindowException) or drop
+      // briefly: reload the same source a couple of times before treating it as dead.
+      const key = attempt.slice(0, attempt.lastIndexOf('#'));
+      const used = reconnects.current[key] ?? 0;
+      if (used < MAX_RECONNECTS) {
+        reconnects.current[key] = used + 1;
+        setRetryKey((k) => k + 1);
+      } else {
+        tracker.fail(attempt, () => advanceRef.current());
+      }
     }
   });
 
@@ -116,6 +128,7 @@ export default function PlayerScreen() {
 
   const retry = () => {
     if (!stream) return;
+    reconnects.current = {};
     setSource({ streamId: stream.id, index: 0 });
     setRetryKey((k) => k + 1);
   };
