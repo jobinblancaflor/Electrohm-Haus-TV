@@ -1,3 +1,4 @@
+// Framework-free: shared by the web app and mobile_app. No React, DOM or browser-only APIs.
 export interface Category {
   id: string;
   name: string;

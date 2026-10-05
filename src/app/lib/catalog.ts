@@ -1,3 +1,4 @@
+// Framework-free: shared by the web app and mobile_app. No React, DOM or browser-only APIs.
 import type { Catalog, Category, Language, Stream } from '../types';
 
 const API = 'https://iptv-org.github.io/api';

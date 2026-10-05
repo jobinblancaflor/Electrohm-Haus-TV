@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Electrohm TV",
+    "slug": "electrohm-tv",
+    "scheme": "electrohmtv",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#14111F",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.electrohmhaussystems.electrohmtv",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "package": "com.electrohmhaussystems.electrohmtv",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#14111F"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-video",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#14111F"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-4201476043998878~7215985858",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "userTrackingUsageDescription": "This lets Electrohm TV show ads that are more relevant to you."
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        { "userTrackingPermission": "This lets Electrohm TV show ads that are more relevant to you." }
+      ]
+    ]
+  },
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-4201476043998878~7215985858"
+  }
+}

@@ -4,13 +4,8 @@ import type { Catalog, Stream } from './types';
 import { loadCatalog } from './lib/catalog';
 import { countryInSentence, countryName } from './lib/format';
 import { readIds, readString, writeIds, writeString } from './lib/storage';
-import {
-  FAVORITES,
-  Header,
-  type CategoryOption,
-  type CountryOption,
-  type LanguageOption,
-} from './components/Header';
+import { FAVORITES, Header } from './components/Header';
+import * as selectors from './lib/selectors';
 import { Tuner } from './components/Tuner';
 import { CategorySection } from './components/CategorySection';
 import { ChannelGrid } from './components/ChannelGrid';
@@ -31,11 +26,6 @@ const LAST_KEY = 'electrohm:last';
 const WATCH_PARAM = 'watch';
 
 type LoadState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; catalog: Catalog };
-
-/** Channels with a logo first, so rails don't open on a wall of monograms. */
-function logosFirst(streams: Stream[]) {
-  return [...streams].sort((a, b) => Number(!a.logo) - Number(!b.logo));
-}
 
 function watchUrl(id: string) {
   const url = new URL(window.location.href);
@@ -92,45 +82,26 @@ export default function App() {
 
   const favorites = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
-  const countries: CountryOption[] = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const s of streams) if (s.channel_country) counts.set(s.channel_country, (counts.get(s.channel_country) ?? 0) + 1);
-    return [...counts]
-      .map(([code, count]) => ({ code, count }))
-      .sort((a, b) => countryName(a.code).localeCompare(countryName(b.code)));
-  }, [streams]);
+  const countries = useMemo(() => selectors.countryOptions(streams), [streams]);
 
-  const countryPool = useMemo(
-    () => (country === 'All' ? streams : streams.filter((s) => s.channel_country === country)),
-    [streams, country],
+  const countryPool = useMemo(() => selectors.streamsInCountry(streams, country), [streams, country]);
+
+  const languageOptions = useMemo(
+    () => selectors.languageOptions(countryPool, catalog?.languages ?? []),
+    [catalog, countryPool],
   );
-
-  const languageOptions: LanguageOption[] = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const s of countryPool) for (const code of s.languages) counts.set(code, (counts.get(code) ?? 0) + 1);
-    return (catalog?.languages ?? [])
-      .filter((l) => counts.has(l.code))
-      .map((l) => ({ ...l, count: counts.get(l.code)! }));
-  }, [catalog, countryPool]);
 
   // A language or category picked in one country may be empty in the next.
   useEffect(() => {
     if (language !== 'All' && catalog && !languageOptions.some((l) => l.code === language)) setLanguage('All');
   }, [catalog, language, languageOptions]);
 
-  const pool = useMemo(
-    () => (language === 'All' ? countryPool : countryPool.filter((s) => s.languages.includes(language))),
-    [countryPool, language],
-  );
+  const pool = useMemo(() => selectors.streamsInLanguage(countryPool, language), [countryPool, language]);
 
-  const categoryOptions: CategoryOption[] = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const s of pool) for (const id of s.channel_category_ids) counts.set(id, (counts.get(id) ?? 0) + 1);
-    return (catalog?.categories ?? [])
-      .filter((c) => counts.has(c.id))
-      .map((c) => ({ id: c.id, name: c.name, count: counts.get(c.id)! }))
-      .sort((a, b) => b.count - a.count);
-  }, [catalog, pool]);
+  const categoryOptions = useMemo(
+    () => selectors.categoryOptions(pool, catalog?.categories ?? []),
+    [catalog, pool],
+  );
 
   useEffect(() => {
     if (categoryId === 'all' || categoryId === FAVORITES || !catalog) return;
@@ -149,26 +120,17 @@ export default function App() {
 
   const lastStream = lastId ? (streamIndex.get(lastId) ?? null) : null;
 
-  const gridStreams = useMemo(() => {
-    // My channels ignores the country and language filters: they're yours wherever you are.
-    let result = categoryId === FAVORITES ? favoriteStreams : pool;
-    if (categoryId !== 'all' && categoryId !== FAVORITES) {
-      result = result.filter((s) => s.channel_category_ids.includes(categoryId));
-    }
-    if (query) {
-      result = result.filter(
-        (s) => s.title.toLowerCase().includes(query) || s.channel_name?.toLowerCase().includes(query),
-      );
-    }
-    return result;
-  }, [pool, favoriteStreams, categoryId, query]);
+  const gridStreams = useMemo(
+    () =>
+      // My channels ignores the country and language filters: they're yours wherever you are.
+      categoryId === FAVORITES
+        ? selectors.filterStreams(favoriteStreams, 'all', query)
+        : selectors.filterStreams(pool, categoryId, query),
+    [pool, favoriteStreams, categoryId, query],
+  );
 
   const homeRails = useMemo(
-    () =>
-      categoryOptions.slice(0, HOME_CATEGORIES).map((category) => ({
-        category,
-        streams: logosFirst(pool.filter((s) => s.channel_category_ids.includes(category.id))).slice(0, RAIL_SIZE),
-      })),
+    () => selectors.homeRails(pool, categoryOptions, HOME_CATEGORIES, RAIL_SIZE),
     [categoryOptions, pool],
   );
 

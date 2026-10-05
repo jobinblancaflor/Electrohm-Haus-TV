@@ -1,22 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { ChevronDown, Search, Star, X } from 'lucide-react';
-import type { Language } from '../types';
 import { countryName, formatCount } from '../lib/format';
-
-export interface CountryOption {
-  code: string;
-  count: number;
-}
-
-export interface CategoryOption {
-  id: string;
-  name: string;
-  count: number;
-}
-
-export interface LanguageOption extends Language {
-  count: number;
-}
+import type { CategoryOption, CountryOption, LanguageOption } from '../lib/selectors';
 
 /** Pseudo-category id for the favorites view. */
 export const FAVORITES = 'favorites';
